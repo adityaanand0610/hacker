@@ -17,6 +17,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://api.allorigins.win"><link rel="preconnect" href="https://corsproxy.io"><link rel="preconnect" href="https://api.codetabs.com">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.3/lightweight-charts.standalone.production.js"></script>
 <script>
   // ===== PASTE YOUR FIREBASE CONFIG HERE (from Firebase Console → Project Settings → Your apps) =====
@@ -2029,6 +2030,13 @@
   #view-record table, #view-trades table{ font-size: 12.5px; }
   #view-record th, #view-trades th, #view-record td, #view-trades td{ padding: 7px 8px; }
   #view-record .stat-box, #view-trades .stat-box{ padding: 12px; }
+  .pf-dot{ display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--teal); margin-right:4px; animation:pfPulse 1.6s ease-in-out infinite; }
+  .pf-dot.busy{ background:var(--accent); }
+  @keyframes pfPulse{ 0%,100%{ opacity:1; } 50%{ opacity:.35; } }
+  .pf-up{ animation:pfUp 1.2s ease-out; } .pf-dn{ animation:pfDn 1.2s ease-out; }
+  @keyframes pfUp{ from{ background:var(--teal-bg); } to{ background:transparent; } }
+  @keyframes pfDn{ from{ background:var(--rose-bg); } to{ background:transparent; } }
+  @media (prefers-reduced-motion:reduce){ .pf-dot,.pf-up,.pf-dn{ animation:none; } }
 </style>
 </head>
 <body class="on-home-view">
@@ -3001,6 +3009,10 @@
         <div class="td-card-head"><span>Portfolio P&amp;L</span><button class="eq-range-btn" id="pfRefreshBtn">↻ Refresh</button></div>
         <div class="td-card-sub" id="pfUpdated" style="display:block;margin-bottom:6px;"></div>
         <div class="td-hero-stats-row" id="pfSummary" style="margin-top:8px;"></div>
+        <details style="margin-top:12px;"><summary class="td-card-sub" style="cursor:pointer;">Faster prices (optional)</summary>
+          <div class="td-card-sub" style="display:block;margin:8px 0;">Free public proxies are the slowest link. Deploy the included <b>yahoo-proxy-worker.js</b> on Cloudflare Workers (free) and paste its URL here for sub-second quotes.</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;"><input type="text" id="pfProxyInput" class="trades-search" style="max-width:320px;padding-left:12px;" placeholder="https://your-worker.workers.dev/"><button class="eq-range-btn" id="pfProxySave">Save</button></div>
+        </details>
       </div>
       <div class="td-card">
         <div class="td-card-head"><span>Open positions · Unrealised</span><span class="td-card-sub">live price</span></div>
@@ -6622,20 +6634,7 @@
   // it's not usually the ticker symbol, it's whichever proxy answered that request.
   // Trying several proxies per request makes a single flaky one a non-issue.
   async function fetchViaProxy(targetUrl){
-    const attempts = [
-      'https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl),
-      'https://corsproxy.io/?url=' + encodeURIComponent(targetUrl),
-      'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(targetUrl)
-    ];
-    let lastErr = null;
-    for(const proxyUrl of attempts){
-      try{
-        const res = await fetchWithTimeout(proxyUrl, 7000);
-        if(!res.ok) throw new Error('HTTP '+res.status);
-        return await res.json();
-      }catch(err){ lastErr = err; }
-    }
-    throw lastErr || new Error('all proxies failed');
+    return pfRace(targetUrl);
   }
 
   // Fetches+parses a single Yahoo symbol's chart data. Returns a points array,
@@ -8303,9 +8302,50 @@
   // ---- Sub-navigation (Overview / History / Calendar / Analytics / New Trade) ----
 
   // ================= Portfolio: live realised / unrealised P&L + chart with buy/sell markers =================
-  // Live prices come from Yahoo (through the same CORS-proxy helper the benchmark charts use).
-  // NSE symbols are auto-mapped to "<TICKER>.NS"; override any odd ticker with the "Save symbol" box.
-  var PF = { quotes:{}, sel:null, mode:'lw', range:null, period:'all', chart:null, ro:null, busy:false };
+  // Speed design: (1) last prices are cached on-device, so the tab paints instantly and refreshes behind the scenes;
+  // (2) every price request RACES all proxies at once (first good answer wins) instead of trying them one by one;
+  // (3) quotes for all holdings load in parallel and each row updates the moment its price lands;
+  // (4) polling is 8s while NSE is open (9:15–15:30 IST, Mon–Fri), slow otherwise, and paused when the tab is hidden;
+  // (5) the chart's last candle is updated live from the same quote — no chart reload.
+  var PF = { quotes:{}, inflight:{}, barCache:{}, sel:null, mode:'lw', range:null, period:'all', chart:null, series:null, bars:[], chartKey:null, lines:[], ro:null, busy:false, lastRun:0, raf:0 };
+  const PF_QKEY = 'fv_pf_quotes_v1';
+  try{ PF.quotes = JSON.parse(localStorage.getItem(PF_QKEY)||'{}') || {}; }catch(e){ PF.quotes = {}; }
+  function pfSaveQuotes(){ try{ localStorage.setItem(PF_QKEY, JSON.stringify(PF.quotes)); }catch(e){} }
+
+  // ---- IST market clock ----
+  function pfIstParts(){
+    const p = new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date());
+    const g = t=>(p.find(x=>x.type===t)||{}).value;
+    return { wd:g('weekday'), min:(parseInt(g('hour'),10)%24)*60+parseInt(g('minute'),10) };
+  }
+  function pfMarketOpen(){ const c=pfIstParts(); return c.wd!=='Sat' && c.wd!=='Sun' && c.min>=555 && c.min<=930; }
+  function pfIstDate(){ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata'}).format(new Date()); }
+  const pfTtl = ()=> pfMarketOpen() ? 8000 : 300000;
+
+  // ---- Fast fetch: race every route simultaneously; optional own Cloudflare Worker goes first ----
+  function pfRace(target){
+    const enc = encodeURIComponent(target);
+    let custom = ''; try{ custom = (localStorage.getItem('fv_pf_proxy')||'').trim(); }catch(e){}
+    const urls = [];
+    if(custom) urls.push(custom + (custom.indexOf('?')>-1?'&':'?') + 'url=' + enc);
+    urls.push('https://api.allorigins.win/raw?url='+enc, 'https://corsproxy.io/?url='+enc, 'https://api.codetabs.com/v1/proxy?quest='+enc);
+    const ctrls = urls.map(()=>new AbortController());
+    return new Promise((resolve,reject)=>{
+      let fails = 0, done = false;
+      urls.forEach((u,i)=>{
+        const to = setTimeout(()=>ctrls[i].abort(), 6000);
+        fetch(u,{signal:ctrls[i].signal})
+          .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+          .then(j=>{
+            if(!(j && j.chart && j.chart.result && j.chart.result[0])) throw new Error('bad payload');
+            clearTimeout(to); if(done) return; done = true;
+            ctrls.forEach((c,k)=>{ if(k!==i) try{ c.abort(); }catch(e){} });
+            resolve(j);
+          })
+          .catch(e=>{ clearTimeout(to); if(++fails===urls.length && !done) reject(e); });
+      });
+    });
+  }
 
   function pfSymbol(tk){
     const m = (db.symbolMap||{})[tk]; if(m) return m;
@@ -8326,15 +8366,27 @@
   }
   function pfCss(v, fb){ return (getComputedStyle(document.documentElement).getPropertyValue(v)||'').trim() || fb; }
 
-  async function pfFetchQuote(sym, force){
+  // ---- Quotes ----
+  function pfFetchQuote(sym, force){
     const c = PF.quotes[sym];
-    if(c && !force && Date.now()-c.at < 60000) return c;
-    try{
-      const d = await fetchViaProxy('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(sym)+'?range=1d&interval=1d');
-      const m = d && d.chart && d.chart.result && d.chart.result[0] && d.chart.result[0].meta;
-      if(!m || m.regularMarketPrice==null) throw new Error('no quote');
-      return PF.quotes[sym] = { ok:true, price:m.regularMarketPrice, prev:(m.chartPreviousClose!=null?m.chartPreviousClose:m.previousClose), at:Date.now() };
-    }catch(e){ return PF.quotes[sym] = { ok:false, at:Date.now() }; }
+    const ttl = (c && c.ok) ? pfTtl() : 20000;
+    if(c && !force && Date.now()-c.at < ttl) return Promise.resolve(c);
+    if(PF.inflight[sym]) return PF.inflight[sym];
+    const prevPrice = (c && c.ok) ? c.price : null;
+    const prom = pfRace('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(sym)+'?range=1d&interval=1d')
+      .then(d=>{
+        const m = d.chart.result[0].meta;
+        if(!m || m.regularMarketPrice==null) throw new Error('no price');
+        const q = { ok:true, price:m.regularMarketPrice, prev:(m.chartPreviousClose!=null?m.chartPreviousClose:m.previousClose), hi:m.regularMarketDayHigh, lo:m.regularMarketDayLow, at:Date.now() };
+        if(prevPrice!=null && q.price!==prevPrice){ q.chg = q.price>prevPrice?1:-1; q.chgAt = Date.now(); }
+        return PF.quotes[sym] = q;
+      })
+      .catch(()=>{
+        if(c && c.ok) return c;                       // keep the last good price on screen instead of blanking it
+        return PF.quotes[sym] = { ok:false, at:Date.now() };
+      })
+      .finally(()=>{ delete PF.inflight[sym]; pfSaveQuotes(); });
+    return PF.inflight[sym] = prom;
   }
 
   function pfOpenPositions(){
@@ -8355,6 +8407,7 @@
       o.upnl = o.ltp!=null ? (o.ltp-o.avg)*o.qty*sign : null;
       o.upct = o.ltp!=null ? ((o.ltp-o.avg)/o.avg)*100*sign : null;
       o.day = (q && q.ok && q.prev!=null) ? (q.price-q.prev)*o.qty*sign : null;
+      o.flash = (q && q.chgAt && Date.now()-q.chgAt<1500) ? (q.chg>0?'pf-up':'pf-dn') : '';
       return o;
     });
   }
@@ -8370,51 +8423,74 @@
   }
   const pfCol = v => v==null ? 'var(--ink-faint)' : (v>=0 ? 'var(--teal)' : 'var(--rose)');
   const pfPct = v => v==null ? '—' : (v>=0?'+':'')+v.toFixed(2)+'%';
+  const pfPanelActive = ()=>{ const p=document.getElementById('tpanel-positions'); return !!(p && p.classList.contains('active')); };
 
-  function renderPortfolio(fetchLive){
+  function pfRender(){
     const sumEl = document.getElementById('pfSummary');
     if(!sumEl) return;
-    const rerender = ()=>{
-      const open = pfOpenPositions(), closed = pfClosedTrades();
-      const real = closed.reduce((s,t)=>s+parseFloat(t.pnl),0);
-      const withLtp = open.filter(o=>o.upnl!=null);
-      const unreal = withLtp.reduce((s,o)=>s+o.upnl,0);
-      const invested = open.reduce((s,o)=>s+o.cost,0);
-      const curVal = withLtp.reduce((s,o)=>s+o.ltp*o.qty,0);
-      const day = open.reduce((s,o)=>s+(o.day||0),0);
-      const hasDay = open.some(o=>o.day!=null);
-      const stat = (l,v,c,sub)=>'<div class="td-hero-stat"><div class="td-hero-stat-lbl">'+l+'</div><div class="td-hero-stat-val" style="color:'+(c||'inherit')+'">'+v+'</div>'+(sub?'<div class="td-card-sub" style="display:block;margin-top:2px;">'+sub+'</div>':'')+'</div>';
-      sumEl.innerHTML =
-        stat('Unrealised', open.length? fmtMoney(unreal):'—', open.length?pfCol(unreal):'', open.length&&invested? pfPct(unreal/invested*100):'') +
-        stat('Realised', fmtMoney(real), pfCol(real), closed.length+' closed') +
-        stat('Total', fmtMoney(real+unreal), pfCol(real+unreal)) +
-        stat('Invested', open.length? fmtMoney(invested):'—') +
-        stat('Current value', open.length? fmtMoney(curVal):'—') +
-        stat('Today', hasDay? fmtMoney(day):'—', hasDay?pfCol(day):'');
-      const missing = open.filter(o=>o.ltp==null).length;
-      const upd = document.getElementById('pfUpdated');
-      const times = Object.values(PF.quotes).filter(q=>q.ok).map(q=>q.at);
-      upd.textContent = times.length ? 'Live prices as of '+new Date(Math.max.apply(null,times)).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})+(missing?' · '+missing+' symbol(s) not found — set the Yahoo symbol in the chart card':'') : (open.length ? (PF.busy?'Fetching live prices…':'No live prices yet — tap Refresh') : 'No open positions.');
+    const open = pfOpenPositions(), closed = pfClosedTrades();
+    const real = closed.reduce((s,t)=>s+parseFloat(t.pnl),0);
+    const withLtp = open.filter(o=>o.upnl!=null);
+    const unreal = withLtp.reduce((s,o)=>s+o.upnl,0);
+    const invested = open.reduce((s,o)=>s+o.cost,0);
+    const curVal = withLtp.reduce((s,o)=>s+o.ltp*o.qty,0);
+    const day = open.reduce((s,o)=>s+(o.day||0),0);
+    const hasDay = open.some(o=>o.day!=null);
+    const stat = (l,v,c,sub)=>'<div class="td-hero-stat"><div class="td-hero-stat-lbl">'+l+'</div><div class="td-hero-stat-val" style="color:'+(c||'inherit')+'">'+v+'</div>'+(sub?'<div class="td-card-sub" style="display:block;margin-top:2px;">'+sub+'</div>':'')+'</div>';
+    sumEl.innerHTML =
+      stat('Unrealised', open.length? fmtMoney(unreal):'—', open.length?pfCol(unreal):'', open.length&&invested? pfPct(unreal/invested*100):'') +
+      stat('Realised', fmtMoney(real), pfCol(real), closed.length+' closed') +
+      stat('Total', fmtMoney(real+unreal), pfCol(real+unreal)) +
+      stat('Invested', open.length? fmtMoney(invested):'—') +
+      stat('Current value', open.length? fmtMoney(curVal):'—') +
+      stat('Today', hasDay? fmtMoney(day):'—', hasDay?pfCol(day):'');
 
-      const th = h=>'<th style="text-align:'+(h[1]||'right')+'">'+h[0]+'</th>';
-      document.getElementById('pfOpenTable').innerHTML = !open.length ? '<div class="td-empty-note">No open trades. Log a trade without an exit and it shows up here.</div>' :
-        '<table style="width:100%;"><thead><tr>'+[['Stock','left'],['Qty'],['Avg'],['LTP'],['P&L'],['%']].map(th).join('')+'</tr></thead><tbody>'+
-        open.sort((a,b)=>b.cost-a.cost).map(o=>'<tr data-pf-tk="'+escapeHtml(o.ticker)+'" style="cursor:pointer;"><td><b>'+escapeHtml(o.ticker)+'</b>'+(o.dir==='short'?' <span class="trade-dir-badge short">S</span>':'')+'</td><td style="text-align:right">'+o.qty+'</td><td style="text-align:right">'+o.avg.toFixed(2)+'</td><td style="text-align:right">'+(o.ltp!=null?o.ltp.toFixed(2)+(o.live?'':'*'):'—')+'</td><td style="text-align:right;color:'+pfCol(o.upnl)+'">'+(o.upnl!=null?fmtPnl(o.upnl):'—')+'</td><td style="text-align:right;color:'+pfCol(o.upct)+'">'+pfPct(o.upct)+'</td></tr>').join('')+'</tbody></table>'+(open.some(o=>o.ltp!=null&&!o.live)?'<div class="td-card-sub" style="display:block;margin-top:6px;">* last imported mark price, not live</div>':'');
+    const missing = open.filter(o=>o.ltp==null).length;
+    const times = open.map(o=>PF.quotes[o.sym]).filter(q=>q&&q.ok).map(q=>q.at);
+    const newest = times.length ? Math.max.apply(null,times) : 0;
+    const hhmmss = newest ? new Date(newest).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '';
+    const mo = pfMarketOpen();
+    const upd = document.getElementById('pfUpdated');
+    if(!open.length) upd.textContent = 'No open positions.';
+    else if(!newest) upd.innerHTML = PF.busy ? '<span class="pf-dot busy"></span> Fetching live prices…' : 'No live prices yet — tap Refresh';
+    else upd.innerHTML = (mo ? '<span class="pf-dot'+((Date.now()-newest)<30000?'':' busy')+'"></span> Live · '+hhmmss+' · refreshes every 8s' : 'Market closed · showing last traded prices ('+hhmmss+')')
+      + (missing ? ' · '+missing+' symbol(s) not found — set the Yahoo symbol in the chart card' : '');
 
-      const by = {};
-      closed.forEach(t=>{ const b = by[t.ticker] || (by[t.ticker]={ticker:t.ticker,n:0,w:0,pnl:0}); b.n++; b.pnl+=parseFloat(t.pnl); if(parseFloat(t.pnl)>0) b.w++; });
-      const rows = Object.values(by).sort((a,b)=>b.pnl-a.pnl);
-      document.getElementById('pfRealTable').innerHTML = !rows.length ? '<div class="td-empty-note">No closed trades in this period.</div>' :
-        '<table style="width:100%;"><thead><tr>'+[['Stock','left'],['Trades'],['Win %'],['Realised P&L']].map(th).join('')+'</tr></thead><tbody>'+
-        rows.map(r=>'<tr data-pf-tk="'+escapeHtml(r.ticker)+'" style="cursor:pointer;"><td><b>'+escapeHtml(r.ticker)+'</b></td><td style="text-align:right">'+r.n+'</td><td style="text-align:right">'+Math.round(r.w/r.n*100)+'%</td><td style="text-align:right;color:'+pfCol(r.pnl)+'">'+fmtPnl(r.pnl)+'</td></tr>').join('')+'</tbody></table>';
-    };
-    rerender();
-    pfFillTickerSelect();
-    if(!fetchLive) return;
-    PF.busy = true; rerender();
+    const th = h=>'<th style="text-align:'+(h[1]||'right')+'">'+h[0]+'</th>';
+    document.getElementById('pfOpenTable').innerHTML = !open.length ? '<div class="td-empty-note">No open trades. Log a trade without an exit and it shows up here.</div>' :
+      '<table style="width:100%;"><thead><tr>'+[['Stock','left'],['Qty'],['Avg'],['LTP'],['P&L'],['%']].map(th).join('')+'</tr></thead><tbody>'+
+      open.sort((a,b)=>b.cost-a.cost).map(o=>'<tr data-pf-tk="'+escapeHtml(o.ticker)+'" style="cursor:pointer;"><td><b>'+escapeHtml(o.ticker)+'</b>'+(o.dir==='short'?' <span class="trade-dir-badge short">S</span>':'')+'</td><td style="text-align:right">'+o.qty+'</td><td style="text-align:right">'+o.avg.toFixed(2)+'</td><td style="text-align:right" class="'+o.flash+'">'+(o.ltp!=null?o.ltp.toFixed(2)+(o.live?'':'*'):'—')+'</td><td style="text-align:right;color:'+pfCol(o.upnl)+'">'+(o.upnl!=null?fmtPnl(o.upnl):'—')+'</td><td style="text-align:right;color:'+pfCol(o.upct)+'">'+pfPct(o.upct)+'</td></tr>').join('')+'</tbody></table>'+(open.some(o=>o.ltp!=null&&!o.live)?'<div class="td-card-sub" style="display:block;margin-top:6px;">* last imported mark price, not live</div>':'');
+
+    const by = {};
+    closed.forEach(t=>{ const b = by[t.ticker] || (by[t.ticker]={ticker:t.ticker,n:0,w:0,pnl:0}); b.n++; b.pnl+=parseFloat(t.pnl); if(parseFloat(t.pnl)>0) b.w++; });
+    const rows = Object.values(by).sort((a,b)=>b.pnl-a.pnl);
+    document.getElementById('pfRealTable').innerHTML = !rows.length ? '<div class="td-empty-note">No closed trades in this period.</div>' :
+      '<table style="width:100%;"><thead><tr>'+[['Stock','left'],['Trades'],['Win %'],['Realised P&L']].map(th).join('')+'</tr></thead><tbody>'+
+      rows.map(r=>'<tr data-pf-tk="'+escapeHtml(r.ticker)+'" style="cursor:pointer;"><td><b>'+escapeHtml(r.ticker)+'</b></td><td style="text-align:right">'+r.n+'</td><td style="text-align:right">'+Math.round(r.w/r.n*100)+'%</td><td style="text-align:right;color:'+pfCol(r.pnl)+'">'+fmtPnl(r.pnl)+'</td></tr>').join('')+'</tbody></table>';
+  }
+  function pfRenderSoon(){
+    if(PF.raf || !pfPanelActive()) return;
+    PF.raf = requestAnimationFrame(()=>{ PF.raf = 0; try{ pfRender(); }catch(e){ console.warn(e); } });
+  }
+
+  function pfRefresh(force){
     const syms = Array.from(new Set(pfOpenPositions().map(o=>o.sym)));
-    Promise.all(syms.map(s=>pfFetchQuote(s, fetchLive==='force'))).then(()=>{ PF.busy=false; rerender(); });
-    if(PF.sel==null || document.getElementById('pfChartBox').childElementCount===0) pfDrawChart();
+    if(!syms.length){ PF.lastRun = Date.now(); return Promise.resolve(); }
+    PF.busy = true; pfRenderSoon();
+    return Promise.all(syms.map(sym=> pfFetchQuote(sym, force).then(q=>{ pfRenderSoon(); pfLiveTick(sym); return q; })))
+      .then(()=>{ PF.busy = false; PF.lastRun = Date.now(); pfRenderSoon(); });
+  }
+
+  // Public entry point (called when the Portfolio tab opens and from the dashboard): paint cached data NOW, refresh behind it.
+  function renderPortfolio(fetchLive){
+    if(!document.getElementById('pfSummary')) return;
+    pfRender();
+    pfFillTickerSelect();
+    if(fetchLive){
+      pfRefresh(fetchLive==='force');
+      const box = document.getElementById('pfChartBox');
+      if(box && box.childElementCount===0) pfDrawChart();
+    }
   }
 
   function pfFillTickerSelect(){
@@ -8424,8 +8500,10 @@
     all.sort((a,b)=> (openSet.has(b)-openSet.has(a)) || a.localeCompare(b));
     if(!all.length){ sel.innerHTML='<option>No trades yet</option>'; return; }
     if(!PF.sel || all.indexOf(PF.sel)<0) PF.sel = all[0];
-    sel.innerHTML = all.map(t=>'<option value="'+escapeHtml(t)+'"'+(t===PF.sel?' selected':'')+'>'+escapeHtml(t)+(openSet.has(t)?' (open)':'')+'</option>').join('');
-    document.getElementById('pfSymInput').value = pfSymbol(PF.sel);
+    const html = all.map(t=>'<option value="'+escapeHtml(t)+'"'+(t===PF.sel?' selected':'')+'>'+escapeHtml(t)+(openSet.has(t)?' (open)':'')+'</option>').join('');
+    if(sel.innerHTML!==html) sel.innerHTML = html;
+    const inp = document.getElementById('pfSymInput');
+    if(inp && document.activeElement!==inp) inp.value = pfSymbol(PF.sel);
   }
 
   function pfAutoRange(tk){
@@ -8435,46 +8513,28 @@
     return days<=170?'6mo': days<=350?'1y': days<=700?'2y':'5y';
   }
 
-  async function pfDrawChart(){
-    const box = document.getElementById('pfChartBox'), note = document.getElementById('pfChartNote');
-    if(!box || !PF.sel) return;
-    const tk = PF.sel, sym = pfSymbol(tk);
-    if(PF.chart){ try{ PF.chart.remove(); }catch(e){} PF.chart=null; }
-    if(PF.ro){ PF.ro.disconnect(); PF.ro=null; }
-    box.innerHTML = ''; note.textContent = '';
-    document.querySelectorAll('#pfRangeToggle .eq-range-btn').forEach(b=>b.style.display = PF.mode==='lw'?'':'none');
-    if(PF.mode==='tv'){
-      const w = document.createElement('div'); w.className='tradingview-widget-container'; w.style.cssText='height:100%;width:100%;';
-      const inner = document.createElement('div'); inner.className='tradingview-widget-container__widget'; inner.style.cssText='height:100%;width:100%;';
-      w.appendChild(inner);
-      const sc = document.createElement('script'); sc.async = true;
-      sc.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-      sc.text = JSON.stringify({ autosize:true, symbol:pfTVSymbol(sym), interval:'D', timezone:'Asia/Kolkata', theme:pfIsDark()?'dark':'light', style:'1', locale:'en', allow_symbol_change:true, hide_side_toolbar:false, support_host:'https://www.tradingview.com' });
-      w.appendChild(sc); box.appendChild(w); return;
-    }
-    if(!window.LightweightCharts){ box.innerHTML='<div class="td-empty-note">Chart library failed to load — check your connection or use the TradingView tab.</div>'; return; }
-    const range = PF.range || pfAutoRange(tk);
-    document.querySelectorAll('#pfRangeToggle .eq-range-btn').forEach(b=>b.classList.toggle('on', b.dataset.r===range));
-    box.innerHTML = '<div class="td-empty-note">Loading '+escapeHtml(sym)+'…</div>';
-    let bars;
-    try{
-      const d = await fetchViaProxy('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(sym)+'?range='+range+'&interval=1d');
-      const r = d.chart.result[0], q = r.indicators.quote[0];
-      bars = r.timestamp.map((t,i)=>({ time:new Date(t*1000).toISOString().slice(0,10), open:q.open[i], high:q.high[i], low:q.low[i], close:q.close[i] }))
-        .filter(b=>b.open!=null&&b.high!=null&&b.low!=null&&b.close!=null);
-      if(!bars.length) throw new Error('empty');
-    }catch(e){
-      box.innerHTML = '<div class="td-empty-note">Couldn\'t load price data for '+escapeHtml(sym)+'. If this isn\'t an NSE cash stock, type its Yahoo symbol above and tap Save symbol.</div>'; return;
-    }
-    if(PF.sel!==tk) return; // user switched stock while loading
-    box.innerHTML = '';
-    const up = pfCss('--teal','#26a69a'), dn = pfCss('--rose','#ef5350'), txt = pfCss('--ink-dim','#888'), grid = pfCss('--line','rgba(128,128,128,.2)');
-    const chart = LightweightCharts.createChart(box, { width:box.clientWidth, height:box.clientHeight,
-      layout:{ background:{type:'solid',color:'transparent'}, textColor:txt }, grid:{ vertLines:{color:grid}, horzLines:{color:grid} },
-      rightPriceScale:{ borderColor:grid }, timeScale:{ borderColor:grid, timeVisible:false }, crosshair:{ mode:0 } });
-    const series = chart.addCandlestickSeries({ upColor:up, downColor:dn, borderUpColor:up, borderDownColor:dn, wickUpColor:up, wickDownColor:dn });
-    series.setData(bars);
-    const times = bars.map(b=>b.time);
+  // ---- Chart ----
+  function pfLoadBars(key){
+    try{ const c = JSON.parse(localStorage.getItem('fv_pf_bars_'+key)||'null'); return (c && c.bars && c.bars.length) ? c : null; }catch(e){ return null; }
+  }
+  function pfSaveBars(key, c){
+    if(c.bars.length>700) return;
+    try{ localStorage.setItem('fv_pf_bars_'+key, JSON.stringify(c)); }catch(e){}
+  }
+  async function pfFetchBars(sym, range){
+    const d = await pfRace('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(sym)+'?range='+range+'&interval=1d');
+    const r = d.chart.result[0], q = r.indicators.quote[0];
+    const bars = r.timestamp.map((t,i)=>({ time:new Date(t*1000).toISOString().slice(0,10), open:q.open[i], high:q.high[i], low:q.low[i], close:q.close[i] }))
+      .filter(b=>b.open!=null&&b.high!=null&&b.low!=null&&b.close!=null);
+    if(!bars.length) throw new Error('empty');
+    return bars;
+  }
+
+  function pfApplyMarkers(){
+    if(!PF.series) return;
+    const tk = PF.sel, note = document.getElementById('pfChartNote');
+    const up = pfCss('--teal','#26a69a'), dn = pfCss('--rose','#ef5350');
+    const times = PF.bars.map(b=>b.time);
     const snap = d=>{ for(let i=0;i<times.length;i++) if(times[i]>=d) return times[i]; return null; };
     const marks = []; let skipped = 0;
     (db.trades||[]).filter(t=>t.ticker===tk).forEach(t=>{
@@ -8489,12 +8549,77 @@
       add(t.exitDT, t.exitPrice, short);
     });
     marks.sort((a,b)=>a.time<b.time?-1:a.time>b.time?1:0);
-    series.setMarkers(marks);
-    pfOpenPositions().filter(o=>o.ticker===tk).forEach(o=> series.createPriceLine({ price:o.avg, color:up, lineWidth:1, lineStyle:2, axisLabelVisible:true, title:'Avg '+(o.dir==='short'?'sell':'buy') }));
+    PF.series.setMarkers(marks);
+    PF.lines.forEach(l=>{ try{ PF.series.removePriceLine(l); }catch(e){} }); PF.lines = [];
+    pfOpenPositions().filter(o=>o.ticker===tk).forEach(o=> PF.lines.push(PF.series.createPriceLine({ price:o.avg, color:up, lineWidth:1, lineStyle:2, axisLabelVisible:true, title:'Avg '+(o.dir==='short'?'sell':'buy') })));
+    if(note) note.textContent = marks.length+' trade marker(s)'+(skipped?' · '+skipped+' older than this range (pick a longer one)':'');
+  }
+
+  function pfBuildChart(key, bars){
+    const box = document.getElementById('pfChartBox');
+    if(PF.chart){ try{ PF.chart.remove(); }catch(e){} PF.chart=null; PF.series=null; }
+    if(PF.ro){ PF.ro.disconnect(); PF.ro=null; }
+    box.innerHTML = '';
+    const up = pfCss('--teal','#26a69a'), dn = pfCss('--rose','#ef5350'), txt = pfCss('--ink-dim','#888'), grid = pfCss('--line','rgba(128,128,128,.2)');
+    const chart = LightweightCharts.createChart(box, { width:box.clientWidth, height:box.clientHeight,
+      layout:{ background:{type:'solid',color:'transparent'}, textColor:txt }, grid:{ vertLines:{color:grid}, horzLines:{color:grid} },
+      rightPriceScale:{ borderColor:grid }, timeScale:{ borderColor:grid, timeVisible:false }, crosshair:{ mode:0 } });
+    const series = chart.addCandlestickSeries({ upColor:up, downColor:dn, borderUpColor:up, borderDownColor:dn, wickUpColor:up, wickDownColor:dn });
+    series.setData(bars);
+    PF.chart = chart; PF.series = series; PF.bars = bars.slice(); PF.chartKey = key; PF.lines = [];
+    pfApplyMarkers();
     chart.timeScale().fitContent();
-    PF.chart = chart;
     PF.ro = new ResizeObserver(()=>{ if(PF.chart) PF.chart.applyOptions({ width:box.clientWidth }); }); PF.ro.observe(box);
-    note.textContent = marks.length+' trade marker(s)'+(skipped?' · '+skipped+' older than this range (pick a longer one)':'');
+    pfLiveTick(PF.sel ? pfSymbol(PF.sel) : '');
+  }
+
+  // Push the latest quote into the chart's current candle — no reload, no flicker.
+  function pfLiveTick(sym){
+    if(!PF.series || !sym || !PF.chartKey || PF.chartKey.split('|')[0]!==sym || !PF.bars.length) return;
+    const q = PF.quotes[sym]; if(!q || !q.ok) return;
+    const last = PF.bars[PF.bars.length-1], today = pfIstDate(); let bar = null;
+    if(last.time===today) bar = { time:today, open:last.open, high:Math.max(last.high,q.price,q.hi||0), low:Math.min(last.low,q.price,q.lo||1e12), close:q.price };
+    else if(last.time<today && pfMarketOpen()) bar = { time:today, open:q.price, high:Math.max(q.price,q.hi||q.price), low:Math.min(q.price,q.lo||q.price), close:q.price };
+    if(!bar) return;
+    try{ PF.series.update(bar); if(last.time===today) PF.bars[PF.bars.length-1]=bar; else PF.bars.push(bar); }catch(e){}
+  }
+
+  async function pfDrawChart(){
+    const box = document.getElementById('pfChartBox'), note = document.getElementById('pfChartNote');
+    if(!box || !PF.sel) return;
+    const tk = PF.sel, sym = pfSymbol(tk);
+    document.querySelectorAll('#pfRangeToggle .eq-range-btn').forEach(b=>b.style.display = PF.mode==='lw'?'':'none');
+    if(PF.mode==='tv'){
+      if(PF.chart){ try{ PF.chart.remove(); }catch(e){} PF.chart=null; PF.series=null; PF.chartKey=null; }
+      if(PF.ro){ PF.ro.disconnect(); PF.ro=null; }
+      box.innerHTML = ''; note.textContent = '';
+      const w = document.createElement('div'); w.className='tradingview-widget-container'; w.style.cssText='height:100%;width:100%;';
+      const inner = document.createElement('div'); inner.className='tradingview-widget-container__widget'; inner.style.cssText='height:100%;width:100%;';
+      w.appendChild(inner);
+      const sc = document.createElement('script'); sc.async = true;
+      sc.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+      sc.text = JSON.stringify({ autosize:true, symbol:pfTVSymbol(sym), interval:'D', timezone:'Asia/Kolkata', theme:pfIsDark()?'dark':'light', style:'1', locale:'en', allow_symbol_change:true, hide_side_toolbar:false, support_host:'https://www.tradingview.com' });
+      w.appendChild(sc); box.appendChild(w); return;
+    }
+    if(!window.LightweightCharts){ box.innerHTML='<div class="td-empty-note">Chart library failed to load — check your connection or use the TradingView tab.</div>'; return; }
+    const range = PF.range || pfAutoRange(tk);
+    document.querySelectorAll('#pfRangeToggle .eq-range-btn').forEach(b=>b.classList.toggle('on', b.dataset.r===range));
+    const key = sym+'|'+range;
+    const cached = PF.barCache[key] || (PF.barCache[key] = pfLoadBars(key));
+    if(cached){ pfBuildChart(key, cached.bars); }           // instant paint from cache
+    else { box.innerHTML = '<div class="td-empty-note">Loading '+escapeHtml(sym)+'…</div>'; note.textContent=''; }
+    const staleAfter = pfMarketOpen() ? 60000 : 600000;
+    if(cached && Date.now()-cached.at < staleAfter) return;
+    try{
+      const bars = await pfFetchBars(sym, range);
+      const fresh = { bars, at:Date.now() };
+      PF.barCache[key] = fresh; pfSaveBars(key, fresh);
+      if(PF.sel!==tk || PF.mode!=='lw' || (PF.range||pfAutoRange(tk))!==range) return;   // user moved on while loading
+      if(PF.series && PF.chartKey===key){ PF.series.setData(bars); PF.bars = bars.slice(); pfApplyMarkers(); pfLiveTick(sym); }
+      else pfBuildChart(key, bars);
+    }catch(e){
+      if(!cached) box.innerHTML = '<div class="td-empty-note">Couldn\'t load price data for '+escapeHtml(sym)+'. If this isn\'t an NSE cash stock, type its Yahoo symbol above and tap Save symbol.</div>';
+    }
   }
 
   (function pfWire(){
@@ -8503,7 +8628,7 @@
     $('pfRefreshBtn').addEventListener('click', ()=> renderPortfolio('force'));
     $('pfTickerSel').addEventListener('change', e=>{ PF.sel=e.target.value; PF.range=null; $('pfSymInput').value=pfSymbol(PF.sel); pfDrawChart(); });
     $('pfPeriod').addEventListener('click', e=>{ const b=e.target.closest('[data-p]'); if(!b) return; PF.period=b.dataset.p;
-      $('pfPeriod').querySelectorAll('.eq-range-btn').forEach(x=>x.classList.toggle('on',x===b)); renderPortfolio(false); });
+      $('pfPeriod').querySelectorAll('.eq-range-btn').forEach(x=>x.classList.toggle('on',x===b)); pfRender(); });
     $('pfModeToggle').addEventListener('click', e=>{ const b=e.target.closest('[data-m]'); if(!b) return; PF.mode=b.dataset.m;
       $('pfModeToggle').querySelectorAll('.eq-range-btn').forEach(x=>x.classList.toggle('on',x===b)); pfDrawChart(); });
     $('pfRangeToggle').addEventListener('click', e=>{ const b=e.target.closest('[data-r]'); if(!b) return; PF.range=b.dataset.r; pfDrawChart(); });
@@ -8511,7 +8636,22 @@
       if(!db.symbolMap) db.symbolMap={}; db.symbolMap[PF.sel]=v; saveDB(); delete PF.quotes[v]; renderPortfolio('force'); pfDrawChart(); });
     $('tpanel-positions').addEventListener('click', e=>{ const r=e.target.closest('[data-pf-tk]'); if(!r) return;
       PF.sel=r.dataset.pfTk; PF.range=null; $('pfTickerSel').value=PF.sel; $('pfSymInput').value=pfSymbol(PF.sel); pfDrawChart(); $('pfChartBox').scrollIntoView({behavior:'smooth',block:'center'}); });
-    setInterval(()=>{ const p=$('tpanel-positions'); if(p && p.classList.contains('active') && !document.hidden) renderPortfolio(true); }, 60000);
+    const px = $('pfProxyInput');
+    if(px){ try{ px.value = localStorage.getItem('fv_pf_proxy')||''; }catch(e){}
+      $('pfProxySave').addEventListener('click', ()=>{ try{ localStorage.setItem('fv_pf_proxy', px.value.trim()); }catch(e){} showToast(px.value.trim()?'Fast proxy saved.':'Fast proxy cleared.', 'success'); renderPortfolio('force'); }); }
+
+    // Background scheduler: 8s while the Portfolio tab is on screen during market hours; gentle prefetch elsewhere so it's
+    // already warm when you open the tab. Skips entirely when the page is hidden.
+    setInterval(()=>{
+      if(document.hidden || PF.busy) return;
+      if(!(db.trades||[]).some(t=>!t.exitDT && !t.exitPrice && t.ticker)) return;
+      const viewOn = $('view-trades') && $('view-trades').classList.contains('active');
+      const mo = pfMarketOpen();
+      const gap = (viewOn && pfPanelActive()) ? (mo?8000:120000) : (mo?60000:600000);
+      if(Date.now()-PF.lastRun >= gap) pfRefresh(false);
+    }, 2000);
+    document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && pfPanelActive()) pfRefresh(false); });
+    window.addEventListener('online', ()=>{ if(pfPanelActive()) pfRefresh(true); });
   })();
 
   function renderTradeDashboard(){
