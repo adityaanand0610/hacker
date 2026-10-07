@@ -17,8 +17,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<link rel="preconnect" href="https://api.allorigins.win"><link rel="preconnect" href="https://corsproxy.io"><link rel="preconnect" href="https://api.codetabs.com">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.3/lightweight-charts.standalone.production.js"></script>
 <script>
   // ===== PASTE YOUR FIREBASE CONFIG HERE (from Firebase Console → Project Settings → Your apps) =====
   const firebaseConfig = {
@@ -2030,13 +2028,125 @@
   #view-record table, #view-trades table{ font-size: 12.5px; }
   #view-record th, #view-trades th, #view-record td, #view-trades td{ padding: 7px 8px; }
   #view-record .stat-box, #view-trades .stat-box{ padding: 12px; }
-  .pf-dot{ display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--teal); margin-right:4px; animation:pfPulse 1.6s ease-in-out infinite; }
-  .pf-dot.busy{ background:var(--accent); }
-  @keyframes pfPulse{ 0%,100%{ opacity:1; } 50%{ opacity:.35; } }
-  .pf-up{ animation:pfUp 1.2s ease-out; } .pf-dn{ animation:pfDn 1.2s ease-out; }
-  @keyframes pfUp{ from{ background:var(--teal-bg); } to{ background:transparent; } }
-  @keyframes pfDn{ from{ background:var(--rose-bg); } to{ background:transparent; } }
-  @media (prefers-reduced-motion:reduce){ .pf-dot,.pf-up,.pf-dn{ animation:none; } }
+
+  /* =====================================================================
+     Broker-powered P&L, live prices, trade chart  (added)
+     ===================================================================== */
+  .bk-live-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .bk-live-badge{
+    display:inline-flex; align-items:center; gap:7px; padding:6px 12px; border-radius:999px;
+    font-size:11.5px; font-weight:700; border:1px solid var(--line); background:var(--surface); color:var(--ink-dim);
+    font-family:'IBM Plex Mono';
+  }
+  .bk-live-badge .bk-dot{ width:8px; height:8px; border-radius:50%; background:var(--ink-faint); flex-shrink:0; }
+  .bk-live-badge.live{ color:var(--teal-dim); border-color:var(--teal); background:var(--teal-bg); }
+  .bk-live-badge.live .bk-dot{ background:var(--teal); animation: pulse 1.4s ease-in-out infinite; }
+  .bk-live-badge.stale{ color:var(--accent-dim); border-color:var(--accent); background:var(--accent-bg); }
+  .bk-live-badge.stale .bk-dot{ background:var(--accent); }
+  .bk-live-badge.err{ color:var(--rose-dim); border-color:var(--rose); background:var(--rose-bg); }
+  .bk-live-badge.err .bk-dot{ background:var(--rose); }
+  .bk-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .bk-note{ font-size:11.5px; color:var(--ink-faint); line-height:1.5; }
+  .bk-note b{ color:var(--ink-dim); }
+  .bk-banner{
+    border:1px dashed var(--accent); background:var(--accent-bg); color:var(--accent-dim);
+    border-radius:var(--radius-md); padding:12px 14px; font-size:12.5px; line-height:1.5; margin-bottom:14px;
+  }
+  .bk-banner button{ margin-top:8px; }
+  .bk-status-list{ display:grid; gap:6px; margin:10px 0 12px; font-size:12.5px; }
+  .bk-status-item{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 12px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--surface); }
+  .bk-status-item .nm{ font-weight:700; }
+  .bk-status-item .st{ font-family:'IBM Plex Mono'; font-size:11.5px; }
+  .bk-status-item .st.ok{ color:var(--teal); }
+  .bk-status-item .st.bad{ color:var(--rose); }
+  .bk-status-item .st.warn{ color:var(--accent-dim); }
+
+  /* ---- P&L panel ---- */
+  .pl-period-row{ display:flex; gap:6px; flex-wrap:wrap; }
+  .pl-comp-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:16px; }
+  @media (min-width:760px){ .pl-comp-grid{ grid-template-columns:repeat(4,1fr); } }
+  .pl-comp{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-md); padding:14px 15px;
+    position:relative; overflow:hidden; box-shadow:var(--shadow-sm);
+  }
+  .pl-comp::before{ content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--line); }
+  .pl-comp.pos::before{ background:var(--teal); } .pl-comp.neg::before{ background:var(--rose); }
+  .pl-comp.total{ background:linear-gradient(145deg, var(--accent-bg), var(--surface) 75%); }
+  .pl-comp.total::before{ background:var(--accent); }
+  .pl-comp .lbl{ font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); font-weight:700; display:flex; align-items:center; gap:6px; }
+  .pl-comp .val{ font-family:'Sora'; font-size:21px; font-weight:800; margin-top:6px; letter-spacing:-.01em; }
+  .pl-comp .val.pos{ color:var(--teal); } .pl-comp .val.neg{ color:var(--rose); }
+  .pl-comp .sub{ font-size:11px; color:var(--ink-faint); margin-top:4px; font-family:'IBM Plex Mono'; }
+  .pl-tag{ font-size:9px; font-weight:800; letter-spacing:.05em; padding:2px 6px; border-radius:999px; background:var(--surface-raised); color:var(--ink-dim); text-transform:uppercase; }
+  .pl-tag.live{ background:var(--teal-bg); color:var(--teal-dim); }
+  .pl-chart-wrap{ position:relative; }
+  .pl-legend{ display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:var(--ink-dim); margin:0 0 8px; font-weight:600; }
+  .pl-legend i{ display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+  .pl-table-wrap{ overflow-x:auto; }
+  .pl-table{ width:100%; border-collapse:collapse; font-size:12.5px; min-width:640px; }
+  .pl-table th{ text-align:right; font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-faint); font-weight:700; padding:7px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  .pl-table td{ text-align:right; padding:10px 8px; border-bottom:1px solid var(--line); font-family:'IBM Plex Mono'; font-size:12px; white-space:nowrap; }
+  .pl-table th:first-child, .pl-table td:first-child{ text-align:left; position:sticky; left:0; background:var(--surface); z-index:1; }
+  .pl-table tr:last-child td{ border-bottom:none; }
+  .pl-table tr.clickable{ cursor:pointer; }
+  .pl-table tr.clickable:hover td{ background:var(--surface-raised); }
+  .pl-table td .sym{ font-family:'Inter'; font-weight:700; font-size:12.5px; color:var(--ink); }
+  .pl-table td .sub{ display:block; font-size:10.5px; color:var(--ink-faint); font-family:'Inter'; margin-top:1px; }
+  .pl-pos{ color:var(--teal); } .pl-neg{ color:var(--rose); } .pl-dim{ color:var(--ink-faint); }
+  .pl-flash-up{ animation: plFlashUp .9s ease-out; } .pl-flash-down{ animation: plFlashDown .9s ease-out; }
+  @keyframes plFlashUp{ from{ background:var(--teal-bg); } to{ background:transparent; } }
+  @keyframes plFlashDown{ from{ background:var(--rose-bg); } to{ background:transparent; } }
+  .pl-unmapped{ border:1px solid var(--line); border-radius:var(--radius-md); padding:12px 14px; margin-top:12px; background:var(--surface-raised); }
+  .pl-unmapped-row{ display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap; }
+  .pl-unmapped-row input{ flex:1; min-width:120px; padding:8px 10px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--surface); color:var(--ink); font-family:'IBM Plex Mono'; font-size:12px; text-transform:uppercase; }
+  .pl-stock-bars{ display:grid; gap:10px; }
+  .pl-sb-row{ display:grid; grid-template-columns:minmax(70px,120px) 1fr auto; gap:10px; align-items:center; font-size:12px; cursor:pointer; }
+  .pl-sb-row:hover .pl-sb-name{ color:var(--accent-dim); }
+  .pl-sb-name{ font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pl-sb-track{ position:relative; height:26px; }
+  .pl-sb-axis{ position:absolute; top:0; bottom:0; width:1px; background:var(--line); }
+  .pl-sb-bar{ position:absolute; height:11px; border-radius:3px; }
+  .pl-sb-bar.real{ top:2px; } .pl-sb-bar.unreal{ top:14px; opacity:.55; background-image:repeating-linear-gradient(135deg, rgba(255,255,255,.55) 0 3px, transparent 3px 6px); }
+  .pl-sb-bar.pos{ background-color:var(--teal); } .pl-sb-bar.neg{ background-color:var(--rose); }
+  .pl-sb-val{ font-family:'IBM Plex Mono'; font-size:11.5px; font-weight:700; text-align:right; white-space:nowrap; }
+
+  /* ---- Trade chart panel ---- */
+  .tc-toolbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  .tc-select{ padding:9px 12px; border-radius:var(--radius-sm); border:1px solid var(--line); background:var(--surface); color:var(--ink); font-family:'Inter'; font-size:13px; font-weight:700; min-width:150px; }
+  .tc-chips{ display:flex; gap:5px; flex-wrap:wrap; }
+  .tc-stage{ position:relative; border:1px solid var(--line); border-radius:var(--radius-md); background:var(--surface); overflow:hidden; touch-action:none; user-select:none; -webkit-user-select:none; }
+  .tc-stage svg{ display:block; width:100%; }
+  .tc-stage.dragging{ cursor:grabbing; }
+  .tc-stage{ cursor:crosshair; }
+  .tc-tip{
+    position:absolute; z-index:5; pointer-events:none; display:none; min-width:150px; max-width:240px;
+    background:var(--ink); color:var(--surface); border-radius:8px; padding:8px 10px; font-size:11.5px; line-height:1.55;
+    font-family:'IBM Plex Mono'; box-shadow:var(--shadow-md);
+  }
+  .tc-tip .h{ font-family:'Inter'; font-weight:800; margin-bottom:3px; }
+  .tc-tip .b{ color:#7FD9A0; font-weight:700; } .tc-tip .s{ color:#F0A088; font-weight:700; }
+  .tc-legend{ display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:var(--ink-dim); margin:10px 2px 0; font-weight:600; }
+  .tc-legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .tc-msg{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:20px; font-size:12.5px; color:var(--ink-faint); background:color-mix(in srgb, var(--surface) 88%, transparent); z-index:4; }
+  .tc-zoom{ position:absolute; right:8px; top:8px; z-index:6; display:flex; gap:4px; }
+  .tc-zoom button{ width:28px; height:28px; border-radius:8px; border:1px solid var(--line); background:var(--surface); color:var(--ink-dim); font-weight:800; cursor:pointer; font-size:14px; line-height:1; }
+  .tc-zoom button:hover{ border-color:var(--accent); color:var(--accent-dim); }
+  .tc-summary{ display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin:12px 0; }
+  @media (min-width:760px){ .tc-summary{ grid-template-columns:repeat(5,1fr); } }
+  .tc-sum{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm); padding:9px 11px; }
+  .tc-sum .l{ font-size:9.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-faint); font-weight:700; }
+  .tc-sum .v{ font-family:'IBM Plex Mono'; font-size:13.5px; font-weight:700; margin-top:3px; }
+
+  /* ---- Import modal: Zerodha sync block ---- */
+  .sync-block{ border:1px solid var(--line); border-radius:var(--radius-md); padding:12px 14px; margin-bottom:14px; background:var(--surface-raised); }
+  .sync-block .ttl{ font-family:'Sora'; font-weight:700; font-size:13px; margin-bottom:4px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .sync-result{ font-size:12px; color:var(--ink-dim); margin-top:8px; line-height:1.5; }
+  .sync-result.err{ color:var(--rose); }
+  .drop-zone{ border:1.5px dashed var(--line); border-radius:var(--radius-md); padding:18px; text-align:center; font-size:12.5px; color:var(--ink-dim); cursor:pointer; transition:all .15s var(--ease); }
+  .drop-zone.over, .drop-zone:hover{ border-color:var(--accent); background:var(--accent-bg); color:var(--accent-dim); }
+  .drop-zone b{ color:var(--ink); }
+  .file-chip-row{ display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-top:8px; }
+  .file-chip{ font-size:10.5px; font-weight:800; padding:2px 8px; border-radius:999px; background:var(--surface); border:1px solid var(--line); color:var(--ink-dim); font-family:'IBM Plex Mono'; }
 </style>
 </head>
 <body class="on-home-view">
@@ -2686,8 +2796,9 @@
     <div class="trade-subnav-row">
       <div class="trade-subnav" id="tradeSubnav">
         <button class="trade-subnav-btn active" data-tpanel="overview">Overview</button>
+        <button class="trade-subnav-btn" data-tpanel="pnl">P&amp;L</button>
+        <button class="trade-subnav-btn" data-tpanel="chart">Chart</button>
         <button class="trade-subnav-btn" data-tpanel="history">History</button>
-        <button class="trade-subnav-btn" data-tpanel="positions">Portfolio</button>
         <button class="trade-subnav-btn" data-tpanel="analytics">Analytics</button>
         <button class="trade-subnav-btn" data-tpanel="lessons">Lessons</button>
         <button class="trade-subnav-btn entry-btn" data-tpanel="entry">+ New Trade</button>
@@ -2811,6 +2922,96 @@
       </div>
     </div>
 
+    <!-- ---- P&L PANEL: realised vs unrealised, live prices ---- -->
+    <div class="trade-panel" id="tpanel-pnl">
+      <div class="bk-live-row">
+        <span class="bk-live-badge" id="plLiveBadge"><span class="bk-dot"></span><span class="bk-live-text">Live prices: not set up</span></span>
+        <div class="bk-actions">
+          <div class="eq-range-toggle" id="plPeriodToggle">
+            <button class="eq-range-btn on" data-pl="all">All</button>
+            <button class="eq-range-btn" data-pl="fy">This FY</button>
+            <button class="eq-range-btn" data-pl="lfy">Last FY</button>
+            <button class="eq-range-btn" data-pl="3m">3M</button>
+            <button class="eq-range-btn" data-pl="1m">1M</button>
+          </div>
+          <button class="td-list-sort" id="plRefreshBtn">↻ Refresh prices</button>
+        </div>
+      </div>
+      <div id="plBanner"></div>
+      <div class="pl-comp-grid" id="plComponents"></div>
+
+      <div class="td-two-col" style="grid-template-columns:1fr;">
+        <div class="td-card">
+          <div class="td-card-head"><span>Realised + Unrealised = Total</span><span class="td-card-sub" id="plWaterfallSub"></span></div>
+          <div id="plWaterfall"></div>
+        </div>
+        <div class="td-card">
+          <div class="td-card-head"><span>Cumulative P&amp;L</span><span class="td-card-sub" id="plCumSub"></span></div>
+          <div class="pl-legend" id="plCumLegend"></div>
+          <div class="pl-chart-wrap" id="plCumChart"></div>
+        </div>
+      </div>
+
+      <div class="td-card">
+        <div class="td-card-head"><span>By Stock · Realised vs Unrealised</span><span class="td-card-sub">tap a stock to open its chart</span></div>
+        <div class="pl-legend"><span><i style="background:var(--teal)"></i>Realised (booked)</span><span><i style="background:var(--teal); opacity:.55"></i>Unrealised (open, hatched)</span></div>
+        <div class="pl-stock-bars" id="plStockBars"></div>
+      </div>
+
+      <div class="td-card">
+        <div class="td-card-head"><span>Stock-wise Breakdown</span><span class="td-card-sub" id="plTableSub"></span></div>
+        <div class="pl-table-wrap"><table class="pl-table" id="plTable"></table></div>
+        <div id="plUnmapped"></div>
+      </div>
+    </div>
+
+    <!-- ---- CHART PANEL: candles with your buys & sells ---- -->
+    <div class="trade-panel" id="tpanel-chart">
+      <div class="bk-live-row">
+        <span class="bk-live-badge" id="tcLiveBadge"><span class="bk-dot"></span><span class="bk-live-text">Live prices: not set up</span></span>
+        <div class="bk-actions">
+          <button class="td-list-sort" id="tcSymbolBtn" title="Change the exchange symbol used for price data">Symbol</button>
+          <button class="td-list-sort" id="tcReloadBtn">↻ Reload</button>
+        </div>
+      </div>
+      <div class="tc-toolbar">
+        <select class="tc-select" id="tcTicker" aria-label="Stock"></select>
+        <div class="eq-range-toggle tc-chips" id="tcInterval">
+          <button class="eq-range-btn on" data-iv="day">1D</button>
+          <button class="eq-range-btn" data-iv="week">1W</button>
+          <button class="eq-range-btn" data-iv="60minute">1H</button>
+          <button class="eq-range-btn" data-iv="15minute">15m</button>
+        </div>
+        <div class="eq-range-toggle tc-chips" id="tcRange">
+          <button class="eq-range-btn on" data-rg="trades">My trades</button>
+          <button class="eq-range-btn" data-rg="3m">3M</button>
+          <button class="eq-range-btn" data-rg="6m">6M</button>
+          <button class="eq-range-btn" data-rg="1y">1Y</button>
+          <button class="eq-range-btn" data-rg="3y">3Y</button>
+        </div>
+      </div>
+      <div id="tcBanner"></div>
+      <div class="tc-summary" id="tcSummary"></div>
+      <div class="tc-stage" id="tcStage">
+        <div class="tc-zoom"><button id="tcZoomIn" aria-label="Zoom in">+</button><button id="tcZoomOut" aria-label="Zoom out">−</button><button id="tcFit" aria-label="Fit" title="Fit all">⤢</button></div>
+        <svg id="tcSvg" role="img" aria-label="Price chart with your buy and sell markers"></svg>
+        <div class="tc-tip" id="tcTip"></div>
+        <div class="tc-msg" id="tcMsg" style="display:none;"></div>
+      </div>
+      <div class="tc-legend">
+        <span><svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1 L11 10 L1 10 Z" fill="var(--teal)"/></svg>Buy</span>
+        <span><svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 11 L11 2 L1 2 Z" fill="var(--rose)"/></svg>Sell</span>
+        <span><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--teal)" stroke-dasharray="4,3" stroke-width="1.6"/></svg>Winning round trip</span>
+        <span><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--rose)" stroke-dasharray="4,3" stroke-width="1.6"/></svg>Losing round trip</span>
+        <span><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--accent)" stroke-width="1.6"/></svg>Avg cost (open)</span>
+        <span style="color:var(--ink-faint);">Drag to pan · pinch or Ctrl/⌘+scroll to zoom</span>
+      </div>
+      <div class="td-card" style="margin-top:14px;">
+        <div class="td-card-head"><span>Trades in this stock</span><span class="td-card-sub">tap a row to jump to it on the chart</span></div>
+        <div class="pl-table-wrap"><table class="pl-table" id="tcTrades"></table></div>
+      </div>
+    </div>
+
     <!-- ---- HISTORY PANEL (List + Calendar, merged into one browsing view) ---- -->
     <div class="trade-panel" id="tpanel-history">
       <div class="td-list-head">
@@ -2820,7 +3021,7 @@
             <button class="eq-range-btn on" data-hview="list">List</button>
             <button class="eq-range-btn" data-hview="calendar">Calendar</button>
           </div>
-          <button class="td-list-sort" id="tdImportCsvBtn">⬆ Import CSV</button>
+          <button class="td-list-sort" id="tdImportCsvBtn">⬆ Import / Sync</button>
           <button class="td-list-sort" id="tdExportTradesBtn">⬇ Trade analysis</button>
         </div>
       </div>
@@ -3000,53 +3201,6 @@
           </div>
           <div class="fy-compare-row" id="cmpResultRow"></div>
         </div>
-      </div>
-    </div>
-
-    <!-- ---- PORTFOLIO PANEL (live realised / unrealised P&L + chart with buy/sell markers) ---- -->
-    <div class="trade-panel" id="tpanel-positions">
-      <div class="td-card">
-        <div class="td-card-head"><span>Portfolio P&amp;L</span><button class="eq-range-btn" id="pfRefreshBtn">↻ Refresh</button></div>
-        <div class="td-card-sub" id="pfUpdated" style="display:block;margin-bottom:6px;"></div>
-        <div class="td-hero-stats-row" id="pfSummary" style="margin-top:8px;"></div>
-        <details style="margin-top:12px;"><summary class="td-card-sub" style="cursor:pointer;">Faster prices (optional)</summary>
-          <div class="td-card-sub" style="display:block;margin:8px 0;">Free public proxies are the slowest link. Deploy the included <b>yahoo-proxy-worker.js</b> on Cloudflare Workers (free) and paste its URL here for sub-second quotes.</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;"><input type="text" id="pfProxyInput" class="trades-search" style="max-width:320px;padding-left:12px;" placeholder="https://your-worker.workers.dev/"><button class="eq-range-btn" id="pfProxySave">Save</button></div>
-        </details>
-      </div>
-      <div class="td-card">
-        <div class="td-card-head"><span>Open positions · Unrealised</span><span class="td-card-sub">live price</span></div>
-        <div style="overflow-x:auto;" id="pfOpenTable"></div>
-      </div>
-      <div class="td-card">
-        <div class="td-card-head"><span>Closed trades · Realised</span>
-          <div class="eq-range-toggle" id="pfPeriod">
-            <button class="eq-range-btn" data-p="month">Month</button>
-            <button class="eq-range-btn" data-p="fy">FY</button>
-            <button class="eq-range-btn on" data-p="all">All</button>
-          </div></div>
-        <div style="overflow-x:auto;" id="pfRealTable"></div>
-      </div>
-      <div class="td-card">
-        <div class="td-card-head" style="flex-wrap:wrap;"><span>Chart · where I bought &amp; sold</span>
-          <div class="eq-range-toggle" id="pfModeToggle">
-            <button class="eq-range-btn on" data-m="lw">Markers</button>
-            <button class="eq-range-btn" data-m="tv">TradingView</button>
-          </div></div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
-          <select id="pfTickerSel" class="trades-sort-select"></select>
-          <div class="eq-range-toggle" id="pfRangeToggle">
-            <button class="eq-range-btn" data-r="6mo">6M</button><button class="eq-range-btn" data-r="1y">1Y</button>
-            <button class="eq-range-btn" data-r="2y">2Y</button><button class="eq-range-btn" data-r="5y">5Y</button>
-          </div>
-        </div>
-        <div style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
-          <input type="text" id="pfSymInput" class="trades-search" style="max-width:190px; padding-left:12px;" placeholder="Yahoo symbol e.g. TCS.NS">
-          <button class="eq-range-btn" id="pfSymSave">Save symbol</button>
-          <span class="td-card-sub" id="pfChartNote"></span>
-        </div>
-        <div id="pfChartBox" style="height:400px; width:100%; position:relative;"></div>
-        <div class="td-card-sub" style="display:block; margin-top:8px;">Markers view (TradingView Lightweight Charts) plots every buy ▲ and sell ▼ from your log plus dashed avg-buy lines. The TradingView tab is the full live chart with indicators — but TradingView's embed can't show your own trades.</div>
       </div>
     </div>
 
@@ -3446,6 +3600,34 @@
         <button class="btn primary" id="capHistAddBtn" style="padding:8px 16px; font-size:12.5px; margin-bottom:14px;">+ Add Entry</button>
         <div class="todo-list" id="capitalHistoryList"></div>
       </div>
+      <div class="card" id="brokerCard">
+        <div class="card-title">🔌 Broker connection <span style="font-weight:500; color:var(--ink-faint); font-size:11px;">· live prices, charts &amp; Zerodha sync</span></div>
+        <p style="font-size:12.5px; color:var(--ink-dim); margin-bottom:12px;">Zerodha (Kite) and Groww don't allow direct calls from a web page, so the app talks to a tiny proxy that you deploy once (<b>broker-proxy.worker.js</b>, free on Cloudflare). Your broker keys stay on that proxy, never in this app or in your cloud backup.</p>
+        <div class="modal-field"><label>Proxy URL</label><input type="url" id="bkUrl" placeholder="https://focusverge-broker.yourname.workers.dev" autocomplete="off" spellcheck="false"></div>
+        <div class="modal-field"><label>App key <span style="font-weight:400; color:var(--ink-faint);">(the APP_KEY you set on the proxy · stored on this device only)</span></label><input type="password" id="bkKey" placeholder="paste APP_KEY" autocomplete="off"></div>
+        <div class="modal-field"><label>Price source</label>
+          <select id="bkPref">
+            <option value="auto">Automatic (Zerodha first, Groww as backup)</option>
+            <option value="kite">Zerodha only</option>
+            <option value="groww">Groww first, Zerodha as backup</option>
+          </select>
+        </div>
+        <div class="toggle-row">
+          <div><div class="toggle-label">⚡ Live prices</div><div class="toggle-sub">Refresh open-position prices every 30 s while the market is open and the Trades tab is showing</div></div>
+          <label class="switch"><input type="checkbox" id="bkLiveToggle"><span class="switch-track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div><div class="toggle-label">🔄 Auto-sync Zerodha trades</div><div class="toggle-sub">Pull each day's executed trades while the app is open (every 15 min in market hours, and once after close)</div></div>
+          <label class="switch"><input type="checkbox" id="bkAutoSyncToggle"><span class="switch-track"></span></label>
+        </div>
+        <div class="bk-status-list" id="bkStatusList"></div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn primary" id="bkSaveBtn" style="padding:9px 16px; font-size:12.5px;">Save &amp; test</button>
+          <button class="btn gold" id="bkConnectKiteBtn" style="padding:9px 16px; font-size:12.5px; display:none;">Connect Zerodha</button>
+          <button class="btn ghost" id="bkClearBtn" style="padding:9px 16px; font-size:12.5px;">Remove</button>
+        </div>
+        <p class="bk-note" style="margin-top:10px;">Zerodha logins expire every morning (~6 AM — a Zerodha rule), so tap <b>Connect Zerodha</b> once a day. Groww renews itself. Market-data access needs the paid Kite Connect plan and/or the Groww Trading API subscription.</p>
+      </div>
     </div>
 
     <div class="section-label">Preferences</div>
@@ -3614,14 +3796,28 @@
   <div class="modal-backdrop" id="csvImportModalBackdrop">
     <div class="modal-sheet" style="max-width:560px;">
       <button class="modal-close" id="csvImportModalClose">✕</button>
-      <div class="modal-title">Import Trades from CSV</div>
+            <div class="modal-title">Import / Sync Trades</div>
       <div id="csvImportStep1">
-        <div class="modal-field">
-          <label>Broker tradebook (CSV or XLSX) or generic CSV</label>
-          <input type="file" id="csvImportFile" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+        <div class="sync-block" id="zSyncBlock">
+          <div class="ttl"><span>⚡ Auto-sync from Zerodha</span><span class="pl-tag" id="zSyncTag">not set up</span></div>
+          <div class="bk-note">Pulls today's executed trades through your broker proxy and matches them against your open positions (FIFO), so sells close the right lots. Zerodha's API only exposes the <b>current day</b> — for older history, import the Console tradebook below. Anything already in your journal is skipped.</div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px;">
+            <button class="btn primary" id="zSyncBtn" style="padding:8px 16px; font-size:12.5px;">Sync now</button>
+            <label class="toggle-label" style="display:flex; gap:8px; align-items:center; font-size:12px; font-weight:600;"><span class="switch"><input type="checkbox" id="zAutoSyncToggle"><span class="switch-track"></span></span>Auto-sync</label>
+          </div>
+          <div class="sync-result" id="zSyncResult"></div>
+        </div>
+
+        <div class="modal-field" style="margin-bottom:0;">
+          <label>Tradebook / P&amp;L file</label>
+          <label class="drop-zone" id="csvDropZone" for="csvImportFile">
+            <div><b>Drop a file here</b> or tap to choose</div>
+            <div class="file-chip-row"><span class="file-chip">.xlsx</span><span class="file-chip">.xls</span><span class="file-chip">.csv</span></div>
+          </label>
+          <input type="file" id="csvImportFile" style="position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
         </div>
         <div class="td-empty-note" style="text-align:left; padding:8px 0 0;">
-          Groww's <b>Stocks P&amp;L Statement</b> export (Console → Reports → P&amp;L, the .xlsx with "Trade Level" &amp; "Scrip Level" sheets) is detected automatically — realised trades, still-open holdings, and the charges breakup all get read in one go. Zerodha Console and Groww tradebook/order-history exports (.csv or .xlsx) are also detected automatically, with buy/sell legs matched FIFO into round-trip trades. Any other broker: export/save as a CSV with columns <b>Ticker, Entry Date, Entry Price, Exit Date, Exit Price, Qty</b> (Direction optional).
+          <b>Zerodha Console</b> tradebook (.xlsx or .csv) — the header row is found automatically even when the sheet has client-info rows above it, and buy/sell legs are matched FIFO into round trips. A Console <b>tradewise exits</b> report (entry/exit date, quantity, buy &amp; sell value) also works. <b>Groww</b> Stocks P&amp;L Statement (.xlsx with "Trade Level" &amp; "Scrip Level" sheets) is detected automatically — realised trades, still-open holdings and the charges breakup in one go. Any other broker: columns <b>Ticker, Entry Date, Entry Price, Exit Date, Exit Price, Qty</b> (Direction optional).
         </div>
         <div id="csvImportError" class="td-empty-note" style="color:var(--rose); display:none; text-align:left; padding-top:8px;"></div>
       </div>
@@ -5435,6 +5631,14 @@
     return {headers, records};
   }
 
+  // Builds 'YYYY-MM-DDTHH:mm:ss' from a leg's date + execution time. Zerodha's
+  // order_execution_time is itself a full ISO datetime, Groww's is just a time,
+  // so the clock part is pulled out with a regex instead of assuming a shape.
+  function legIso(leg){
+    const d = String(leg.trade_date||'').slice(0,10);
+    const m = String(leg.order_execution_time||'').match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    return d+'T'+(m ? m[1].padStart(2,'0')+':'+m[2]+':'+(m[3]||'00') : '09:15:00');
+  }
   function fifoReconstructFromLegs(records){
     // records: [{symbol, trade_date, trade_type('buy'|'sell'), quantity, price, order_execution_time}]
     const bySymbol = {};
@@ -5446,8 +5650,8 @@
     const trades = [];
     Object.keys(bySymbol).forEach(sym=>{
       const legs = bySymbol[sym].slice().sort((a,b)=>{
-        const ta = Date.parse((a.trade_date||'')+' '+(a.order_execution_time||'00:00:00'));
-        const tb = Date.parse((b.trade_date||'')+' '+(b.order_execution_time||'00:00:00'));
+        const ta = Date.parse(legIso(a));
+        const tb = Date.parse(legIso(b));
         return (isNaN(ta)?0:ta) - (isNaN(tb)?0:tb);
       });
       let longQ = [], shortQ = []; // each: {qty, price, time}
@@ -5455,27 +5659,27 @@
         const type = (leg.trade_type||'').toLowerCase();
         let qty = parseFloat(leg.quantity);
         const price = parseFloat(leg.price);
-        const timeStr = (leg.trade_date||'')+'T'+((leg.order_execution_time||'09:15:00').split(' ').pop());
+        const timeStr = legIso(leg);
         if(isNaN(qty) || isNaN(price) || qty<=0) return;
         if(type==='buy'){
           // First cover any open shorts (FIFO), remainder opens/extends a long.
           while(qty>0 && shortQ.length){
             const lot = shortQ[0];
             const matched = Math.min(qty, lot.qty);
-            trades.push({ ticker:sym, direction:'short', entryDT:lot.time, entryPrice:lot.price, exitDT:timeStr, exitPrice:price, qty:matched });
+            trades.push({ ticker:sym, direction:'short', entryDT:lot.time, entryPrice:lot.price, exitDT:timeStr, exitPrice:price, qty:matched, isin:lot.isin });
             lot.qty -= matched; qty -= matched;
             if(lot.qty<=0.0001) shortQ.shift();
           }
-          if(qty>0) longQ.push({qty, price, time:timeStr});
+          if(qty>0) longQ.push({qty, price, time:timeStr, isin:leg.isin});
         } else if(type==='sell'){
           while(qty>0 && longQ.length){
             const lot = longQ[0];
             const matched = Math.min(qty, lot.qty);
-            trades.push({ ticker:sym, direction:'long', entryDT:lot.time, entryPrice:lot.price, exitDT:timeStr, exitPrice:price, qty:matched });
+            trades.push({ ticker:sym, direction:'long', entryDT:lot.time, entryPrice:lot.price, exitDT:timeStr, exitPrice:price, qty:matched, isin:lot.isin });
             lot.qty -= matched; qty -= matched;
             if(lot.qty<=0.0001) longQ.shift();
           }
-          if(qty>0) shortQ.push({qty, price, time:timeStr});
+          if(qty>0) shortQ.push({qty, price, time:timeStr, isin:leg.isin});
         }
       });
     });
@@ -5509,7 +5713,7 @@
       direction: dir, entryDT: raw.entryDT||(entryDateOnly?entryDateOnly+'T09:15':''), entryPrice: isNaN(entryPrice)?'':entryPrice,
       qty: isNaN(qty)?'':qty, posSize,
       exitDT: raw.exitDT||(exitDateOnly?exitDateOnly+'T15:30':''), exitPrice: isNaN(exitPrice)?'':exitPrice,
-      pnl, source: 'csv-import'
+      pnl, source: 'csv-import', isin: raw.isin||''
     };
   }
 
@@ -5560,7 +5764,8 @@
         quantity: r[legMap.quantity],
         price: r[legMap.price],
         trade_date: r[legMap.trade_date],
-        order_execution_time: legMap.exec_time ? r[legMap.exec_time] : ''
+        order_execution_time: legMap.exec_time ? r[legMap.exec_time] : '',
+        isin: r['isin']||''
       }));
       const legTrades = fifoReconstructFromLegs(normalized);
       if(!legTrades.length) throw new Error('Found broker rows but could not match any complete buy/sell round trips.');
@@ -5575,6 +5780,17 @@
         exitDT: r[gMap.exitDate], exitPrice: r[gMap.exitPrice], qty: r[gMap.qty],
         direction: gMap.direction ? r[gMap.direction] : ''
       })).filter(t=>t.ticker);
+    }
+    // Path 3: one row per closed lot with buy/sell *values* (e.g. Zerodha Console tradewise exits).
+    const bMap = mapHeaders(headers, Object.assign({}, GENERIC_HEADER_ALIASES, {buyValue:['buy value','buy amount','purchase value'], sellValue:['sell value','sell amount','sale value']}));
+    if(['ticker','entryDate','exitDate','qty','buyValue','sellValue'].every(k=> bMap[k])){
+      const normDT = v=> String(v||'').trim().replace(' ','T').slice(0,16);
+      const built = records.map(r=>{
+        const q = parseFloat(r[bMap.qty]), bv = parseFloat(r[bMap.buyValue]), sv = parseFloat(r[bMap.sellValue]);
+        if(!(q>0) || isNaN(bv) || isNaN(sv)) return null;
+        return buildTradeObject({ticker:r[bMap.ticker], entryDT:normDT(r[bMap.entryDate]), exitDT:normDT(r[bMap.exitDate]), qty:q, entryPrice:bv/q, exitPrice:sv/q, direction:'long', isin:r['isin']||''});
+      }).filter(t=> t && t.ticker);
+      if(built.length) return built;
     }
     throw new Error('Unrecognized file format. Expected a broker tradebook export (Zerodha, Groww, etc.), or columns: Ticker, Entry Date, Entry Price, Exit Date, Exit Price, Qty.');
   }
@@ -5756,21 +5972,19 @@
       growwImportMeta = { charges: growwResult.charges, reportedRealisedPnl: growwResult.reportedRealisedPnl, reportedUnrealisedPnl: growwResult.reportedUnrealisedPnl, period: growwResult.period };
       return growwResult.trades;
     }
-    // ---- fallback: generic single-sheet tradebook (Zerodha, other brokers) ----
-    const sheet = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet, {defval:'', raw:true});
-    if(!rows.length) throw new Error('No data rows found in that file.');
-    const headers = Object.keys(rows[0]).map(h=>h.trim().toLowerCase());
-    const records = rows.map(row=>{
-      const obj = {};
-      Object.keys(row).forEach(k=>{ obj[k.trim().toLowerCase()] = xlsxCellToStr(row[k]); });
-      return obj;
-    });
-    return tradesFromRecords(headers, records);
+    // ---- fallback: any broker workbook. The header row can sit under client-info
+    // rows (Zerodha Console does this) and on any sheet, so it's searched for.
+    const tables = xlsxExtractTables(wb);
+    if(!tables.length) throw new Error('Could not find a header row (Symbol, Trade date, Quantity, Price …) in any sheet of that workbook.');
+    let lastErr = null;
+    for(const tb of tables){
+      try{ if(!tb.records.length) continue; return tradesFromRecords(tb.headers, tb.records); }catch(e){ lastErr = e; }
+    }
+    throw lastErr || new Error('No data rows found in that file.');
   }
 
   function isDuplicateTrade(t){
-    return (db.trades||[]).some(ex=> ex.ticker===t.ticker && ex.entryDT===t.entryDT && ex.exitDT===t.exitDT && Math.abs((parseFloat(ex.qty)||0)-(parseFloat(t.qty)||0))<0.001);
+    return (db.trades||[]).some(ex=> ex.ticker===t.ticker && (ex.entryDT||'').slice(0,16)===(t.entryDT||'').slice(0,16) && (ex.exitDT||'').slice(0,16)===(t.exitDT||'').slice(0,16) && Math.abs((parseFloat(ex.qty)||0)-(parseFloat(t.qty)||0))<0.001);
   }
   // A still-open position (Groww "Unrealised trades") re-appears in every
   // later weekly statement while it's held, each time with a fresher mark
@@ -5797,6 +6011,7 @@
     document.getElementById('csvImportError').style.display = 'none';
     document.getElementById('csvImportConfirmBtn').style.display = 'none';
     csvImportBackdrop.classList.add('open');
+    try{ zRefreshTag(); }catch(e){}
   });
   const closeCsvImport = ()=> csvImportBackdrop.classList.remove('open');
   document.getElementById('csvImportModalClose').addEventListener('click', closeCsvImport);
@@ -6354,6 +6569,7 @@
             <div class="trade-detail-row"><span class="lbl">One lesson</span>${escapeHtml(t.lesson||'—')}</div>
             ${t.screenshot?`<img src="${t.screenshot}" style="max-width:100%; border-radius:6px; margin-top:6px; border:1px solid var(--line);">`:''}
             <div class="trade-actions">
+              <button class="btn ghost" data-chart-trade="${escapeHtml(t.ticker||'')}">Chart</button>
               <button class="btn ghost" data-edit-trade="${t.id}">Edit</button>
               ${(!t.exitDT && parseFloat(t.qty)>0)?`<button class="btn ghost" data-partial-exit-trade="${t.id}">Partial Exit</button>`:''}
               <button class="btn ghost" data-del-trade="${t.id}" style="border-color:var(--rose-dim); color:var(--rose);">Delete</button>
@@ -6365,7 +6581,7 @@
 
     el.querySelectorAll('.trade-card').forEach(card=>{
       card.addEventListener('click', (e)=>{
-        if(e.target.closest('[data-edit-trade]') || e.target.closest('[data-del-trade]')) return;
+        if(e.target.closest('[data-edit-trade]') || e.target.closest('[data-del-trade]') || e.target.closest('[data-chart-trade]')) return;
         card.classList.toggle('expanded');
       });
     });
@@ -6591,105 +6807,241 @@
   // these differently-scaled things (₹ P&L, an index level in the thousands) can
   // sit on one axis — exactly what Zerodha's own "Portfolio performance" chart does.
   //
-  // Index data comes from Yahoo Finance's public chart endpoint. Yahoo doesn't send
-  // Access-Control-Allow-Origin headers, so a direct browser fetch from this app's
-  // origin is blocked — we route it through a free CORS proxy instead (tries
-  // api.allorigins.win first, falls back to api.codetabs.com). Neither proxy has an
-  // uptime guarantee, so results are cached in localStorage for 12h: once it's loaded
-  // once, toggling ranges/series or a flaky connection later won't need a fresh fetch,
-  // and if a fetch fails outright we fall back to whatever's cached (even if stale)
-  // before finally showing an inline "couldn't load" note.
-  const BENCHMARK_TICKERS = {
-    nifty50: { yahoo: '^NSEI', label: 'Nifty 50', color: '#4A7FB5' },
-    midcap100: { yahoo: '^CRSMID', yahooAlt: ['NIFTY_MIDCAP_100.NS', 'NIFTYMIDCAP150.NS'], label: 'Nifty Midcap 100', color: 'var(--teal)' },
-    smallcap250: { yahoo: 'NIFTYSMLCAP250.NS', yahooAlt: ['HDFCSML250.NS'], label: 'Nifty Smallcap 250', color: 'var(--rose)' }
+
+  // =====================================================================
+  // BROKER LAYER — Zerodha (Kite) / Groww through your own proxy
+  // (broker-proxy.worker.js). Powers: live prices → unrealised P&L,
+  // benchmark indices, candle charts, and Zerodha trade sync.
+  // =====================================================================
+  var BK_CFG_KEY = 'fv_broker_conn_v1';          // device-only: proxy URL + app key (never goes to Firestore)
+  var bkCfgObj = null;
+  var liveQuotes = {};                            // 'NSE:XYZ' -> {ltp, prevClose, dayChange, dayChangePct, source, ts}
+  var liveMissing = [];
+  var liveState = {status:'off', msg:'', source:'', asOf:0};
+  var liveInflight = null, liveTimer = null, bkLastPersist = 0, bkResolveTried = {};
+  var bkStatusCache = null, bkLoginNeeded = false;
+
+  function bkCfg(){
+    if(bkCfgObj) return bkCfgObj;
+    var d = {url:'', appKey:'', pref:'auto', livePrices:true, autoSync:false};
+    try{ bkCfgObj = Object.assign(d, JSON.parse(localStorage.getItem(BK_CFG_KEY)||'{}')); }catch(e){ bkCfgObj = d; }
+    return bkCfgObj;
+  }
+  function bkSaveCfg(){ try{ localStorage.setItem(BK_CFG_KEY, JSON.stringify(bkCfg())); }catch(e){} }
+  function bkReady(){ var c = bkCfg(); return !!(c.url && c.appKey); }
+  function liveQuotesCount(){ return Object.keys(liveQuotes||{}).length; }
+  function bkEl(id){ return document.getElementById(id); }
+  function bkIstNow(){ return new Date(Date.now()+19800000); }
+  function bkMarketOpen(){
+    var d = bkIstNow(), dow = d.getUTCDay(); if(dow===0||dow===6) return false;
+    var m = d.getUTCHours()*60+d.getUTCMinutes(); return m>=555 && m<=930;      // 09:15–15:30 IST
+  }
+  function bkIstDate(tSec){ return new Date((tSec+19800)*1000).toISOString().slice(0,10); }
+  function bkIstToEpoch(s){                                                       // '2026-03-02T09:15[:ss]' (IST wall time) → epoch seconds
+    if(!s) return NaN;
+    var t = String(s).trim().replace(' ','T'); if(t.length===10) t += 'T09:15:00'; if(t.length===16) t += ':00';
+    return Math.floor(Date.parse(t+'+05:30')/1000);
+  }
+  function bkRound2(n){ return Math.round(n*100)/100; }
+  function bkPx(n){ return (n===null||n===undefined||isNaN(n)) ? '—' : Number(n).toLocaleString('en-IN',{minimumFractionDigits:2, maximumFractionDigits:2}); }
+  function bkSignCls(n){ return (n===null||n===undefined||isNaN(n)) ? 'pl-dim' : (n>=0 ? 'pl-pos' : 'pl-neg'); }
+  function bkPct(n){ return (n===null||n===undefined||isNaN(n)) ? '—' : (n>=0?'+':'')+n.toFixed(2)+'%'; }
+  function bkTradesVisible(){ var v = bkEl('view-trades'); return !!(v && v.classList.contains('active')); }
+  function bkPanelActive(name){ var p = bkEl('tpanel-'+name); return !!(p && p.classList.contains('active')) && bkTradesVisible(); }
+
+  async function bkGet(path, params, timeoutMs){
+    var c = bkCfg();
+    if(!c.url || !c.appKey){ var e0 = new Error('Broker proxy not set up — add it in Settings → Broker connection.'); e0.code = 'no_proxy'; throw e0; }
+    var qs = new URLSearchParams();
+    Object.keys(params||{}).forEach(function(k){ var v = params[k]; if(v!==undefined && v!==null && v!=='') qs.set(k, v); });
+    var ctrl = new AbortController(), timer = setTimeout(function(){ ctrl.abort(); }, timeoutMs||25000);
+    try{
+      var res = await fetch(c.url.trim().replace(/\/+$/,'')+path+(qs.toString()?'?'+qs:''), {headers:{'X-App-Key': c.appKey}, signal: ctrl.signal});
+      var body = null; try{ body = await res.json(); }catch(e){}
+      if(!res.ok){ var e1 = new Error((body && body.error) || ('Proxy error '+res.status)); e1.status = res.status; e1.code = (body && body.code) || ('http_'+res.status); throw e1; }
+      return body;
+    }catch(err){
+      if(err.name==='AbortError'){ var e2 = new Error('The broker proxy took too long to respond.'); e2.code = 'timeout'; throw e2; }
+      if(err instanceof TypeError){ var e3 = new Error('Could not reach the broker proxy — check the URL, your connection and the proxy\'s ALLOWED_ORIGIN.'); e3.code = 'network'; throw e3; }
+      throw err;
+    }finally{ clearTimeout(timer); }
+  }
+
+  // ---- ticker → exchange symbol -----------------------------------------
+  function bkSymbolMap(){ return db.symbolMap || (db.symbolMap = {}); }
+  function bkSymbolKey(ticker){
+    var tk = String(ticker||'').toUpperCase().trim(); if(!tk) return null;
+    var m = bkSymbolMap()[tk]; if(m) return m.indexOf(':')>-1 ? m : 'NSE:'+m;
+    if(/^[A-Z0-9][A-Z0-9&\-]{0,19}$/.test(tk)) return 'NSE:'+tk;          // Zerodha-style symbols map 1:1
+    return null;                                                           // e.g. Groww statement names like "RELIANCE INDUSTRIES LTD"
+  }
+  function bkIsinFor(ticker){ var t = (db.trades||[]).find(function(x){ return x.ticker===ticker && x.isin; }); return t ? t.isin : ''; }
+  async function bkResolveUnmapped(){
+    if(!bkReady()) return 0;
+    var n = 0, tickers = Array.from(new Set((db.trades||[]).map(function(t){ return t.ticker; }).filter(Boolean)));
+    for(var i=0;i<tickers.length;i++){
+      var tk = tickers[i]; if(bkSymbolKey(tk)) continue;
+      var isin = bkIsinFor(tk); if(!isin || bkResolveTried[isin]) continue; bkResolveTried[isin] = 1;
+      try{ var r = await bkGet('/resolve', {isin:isin}); var m = (r.matches||[])[0]; if(m && m.symbol){ bkSymbolMap()[tk] = m.exchange+':'+m.symbol; n++; } }catch(e){}
+    }
+    if(n){ try{ saveDB(); }catch(e){} }
+    return n;
+  }
+
+  // ---- open positions (aggregated per stock & direction) ----------------
+  function bkOpenRows(){
+    var rows = {};
+    (db.trades||[]).forEach(function(t){
+      if(t.exitDT) return;
+      var qty = parseFloat(t.qty), ep = parseFloat(t.entryPrice);
+      if(!(qty>0) || isNaN(ep)) return;
+      var dir = t.direction==='short' ? 'short' : 'long', k = (t.ticker||'')+'|'+dir;
+      var r = rows[k] || (rows[k] = {ticker:t.ticker||'', dir:dir, qty:0, cost:0, trades:[], firstDate:t.date||''});
+      r.qty += qty; r.cost += qty*ep; r.trades.push(t);
+      if(t.date && (!r.firstDate || t.date<r.firstDate)) r.firstDate = t.date;
+    });
+    return Object.keys(rows).map(function(k){
+      var r = rows[k], sgn = r.dir==='short' ? -1 : 1;
+      r.avg = r.cost/r.qty; r.key = bkSymbolKey(r.ticker);
+      var q = r.key ? liveQuotes[r.key] : null; r.quote = q || null; r.live = !!q;
+      var mark = q ? q.ltp : null;
+      if(mark===null){
+        var marks = r.trades.map(function(t){ return parseFloat(t.markPrice); }).filter(function(x){ return !isNaN(x); });
+        if(marks.length) mark = marks[marks.length-1];
+      }
+      r.ltp = mark; r.value = mark!==null ? mark*r.qty : null;
+      r.unreal = mark!==null ? (mark-r.avg)*r.qty*sgn : null;
+      if(!q){ var st = r.trades.map(function(t){ return parseFloat(t.unrealizedPnl); }); if(st.length && st.every(function(x){ return !isNaN(x); })) r.unreal = st.reduce(function(a,b){ return a+b; },0); }
+      r.unrealPct = (r.unreal!==null && r.cost) ? r.unreal/r.cost*100 : null;
+      r.dayPnl = (q && q.dayChange!==null && q.dayChange!==undefined) ? q.dayChange*r.qty*sgn : null;
+      r.dayPct = q ? q.dayChangePct : null;
+      return r;
+    });
+  }
+
+  // Writes the latest live price into each open trade's markPrice/unrealizedPnl, which is
+  // what every existing feature (open allocation, XIRR, portfolio value) already reads.
+  function bkApplyLiveMarks(){
+    (db.trades||[]).forEach(function(t){
+      if(t.exitDT) return;
+      var key = bkSymbolKey(t.ticker), q = key ? liveQuotes[key] : null; if(!q) return;
+      var qty = parseFloat(t.qty), ep = parseFloat(t.entryPrice); if(!(qty>0) || isNaN(ep)) return;
+      var sgn = t.direction==='short' ? -1 : 1;
+      t.markPrice = q.ltp; t.markDate = todayKey(); t.unrealizedPnl = bkRound2((q.ltp-ep)*qty*sgn); t.liveMark = true;
+    });
+    if(Date.now()-bkLastPersist > 120000){ bkLastPersist = Date.now(); try{ localStorage.setItem(DB_KEY, JSON.stringify(db)); }catch(e){} }
+  }
+
+  function bkSetLive(status, msg, source, asOf){
+    liveState = {status:status, msg:msg||'', source:source||liveState.source||'', asOf:asOf||liveState.asOf||0};
+    bkPaintBadges();
+  }
+  function bkPaintBadges(){
+    var s = liveState, cls = '', txt = '';
+    var srcName = s.source ? (s.source.indexOf('+')>-1 ? 'Zerodha + Groww' : (s.source==='kite' ? 'Zerodha' : (s.source==='groww' ? 'Groww' : s.source))) : '';
+    var hhmm = s.asOf ? new Date(s.asOf).toLocaleTimeString('en-IN',{hour:'2-digit', minute:'2-digit', second:'2-digit'}) : '';
+    if(!bkReady()){ txt = 'Live prices: connect a broker in Settings'; }
+    else if(s.status==='loading'){ txt = 'Fetching prices…'; cls = 'stale'; }
+    else if(s.status==='err'){ txt = 'Price feed: '+(s.msg||'error'); cls = 'err'; }
+    else if(s.status==='ok'){ if(bkMarketOpen()){ txt = 'LIVE · '+srcName+' · '+hhmm; cls = 'live'; } else { txt = 'Market closed · last price · '+srcName+' · '+hhmm; cls = 'stale'; } }
+    else if(s.status==='idle'){ txt = s.msg || 'No open positions to price'; }
+    else { txt = 'Live prices off'; }
+    ['plLiveBadge','tcLiveBadge'].forEach(function(id){
+      var el = bkEl(id); if(!el) return;
+      el.className = 'bk-live-badge '+cls; el.querySelector('.bk-live-text').textContent = txt; el.title = s.msg || '';
+    });
+  }
+
+  async function bkRefreshQuotes(){
+    if(!bkReady()){ bkSetLive('off'); return false; }
+    if(liveInflight) return liveInflight;
+    var keys = new Set();
+    bkOpenRows().forEach(function(r){ if(r.key) keys.add(r.key); });
+    if(typeof tcState!=='undefined' && tcState && tcState.ticker){ var ck = bkSymbolKey(tcState.ticker); if(ck) keys.add(ck); }
+    keys = Array.from(keys);
+    if(!keys.length){ bkSetLive('idle', (db.trades||[]).some(function(t){ return !t.exitDT; }) ? 'Set a symbol for your open positions below' : 'No open positions to price'); return false; }
+    bkSetLive('loading');
+    liveInflight = (async function(){
+      try{
+        var out = [];
+        for(var i=0;i<keys.length;i+=100) out.push(await bkGet('/quotes', {symbols: keys.slice(i,i+100).join(','), broker: bkCfg().pref}));
+        var got = {}, missing = [], src = new Set(), asOf = Date.now();
+        out.forEach(function(r){ Object.assign(got, r.quotes||{}); missing = missing.concat(r.missing||[]); if(r.source) String(r.source).split('+').forEach(function(x){ src.add(x); }); });
+        Object.keys(got).forEach(function(k){ var q = got[k], old = liveQuotes[k]; q.prevLtp = old ? old.ltp : null; liveQuotes[k] = q; });
+        liveMissing = missing; bkLoginNeeded = false;
+        bkApplyLiveMarks();
+        bkSetLive('ok', '', Array.from(src).join('+'), asOf);
+        bkLiveDependents();
+        return true;
+      }catch(e){
+        if(e.code==='kite_login') bkLoginNeeded = true;
+        bkSetLive('err', e.message);
+        bkLiveDependents();
+        return false;
+      }finally{ liveInflight = null; }
+    })();
+    return liveInflight;
+  }
+  function bkMaybeRefresh(){
+    if(!bkReady() || !bkCfg().livePrices) { bkPaintBadges(); return; }
+    var age = Date.now()-(liveState.asOf||0), limit = bkMarketOpen() ? 25000 : 300000;
+    if(liveState.status!=='ok' || age>limit) bkRefreshQuotes();
+  }
+  function bkLiveDependents(){
+    try{ if(bkPanelActive('pnl')) renderPnlPanel(true); }catch(e){ console.warn(e); }
+    try{ if(bkPanelActive('chart')) tcOnLiveTick(); }catch(e){ console.warn(e); }
+    try{ if(bkPanelActive('overview')) renderTradeOverview(); }catch(e){ console.warn(e); }
+  }
+  function bkStartLoop(){
+    if(liveTimer) return;
+    liveTimer = setInterval(function(){
+      if(document.hidden || !bkReady() || !bkCfg().livePrices || !bkTradesVisible()) return;
+      if(bkMarketOpen()) bkRefreshQuotes();
+    }, 30000);
+    document.addEventListener('visibilitychange', function(){ if(!document.hidden && bkTradesVisible()) bkMaybeRefresh(); });
+  }
+
+  // =====================================================================
+  // BENCHMARK INDICES (Nifty 50 / Midcap 100 / Smallcap 250) — broker candles
+  // =====================================================================
+  // Daily candles come from the same broker proxy as everything else (Zerodha
+  // first, Groww as backup), rebased to "% change since the start of the visible
+  // range" so ₹ P&L and an index level can share one axis. Results are cached
+  // on-device for 12 h; if a refresh fails the stale cache is used.
+  var BENCHMARK_TICKERS = {
+    nifty50:     { symbols: ['NSE:NIFTY 50'], label: 'Nifty 50', color: '#4A7FB5' },
+    midcap100:   { symbols: ['NSE:NIFTY MIDCAP 100'], label: 'Nifty Midcap 100', color: 'var(--teal)' },
+    smallcap250: { symbols: ['NSE:NIFTY SMLCAP 250', 'NSE:NIFTY SMALLCAP 250'], label: 'Nifty Smallcap 250', color: 'var(--rose)' }
   };
-  const BENCHMARK_CACHE_KEY = 'fv_benchmark_cache_v2';
-  const BENCHMARK_CACHE_TTL = 12*60*60*1000; // 12h
-  let benchmarkMemCache = {};      // key -> points array, 'loading', or 'error' (this session)
-  let benchmarkVisible = { nifty50: true, midcap100: true, smallcap250: true }; // legend on/off, shared across both charts
+  const BENCHMARK_CACHE_KEY = 'fv_benchmark_cache_v3';
+  const BENCHMARK_CACHE_TTL = 12*60*60*1000;
+  let benchmarkMemCache = {};
+  let benchmarkVisible = { nifty50: true, midcap100: true, smallcap250: true };
   let cmpEnabled = { equity: false, roc: false };
 
-  function loadBenchmarkDiskCache(){
-    try{ return JSON.parse(localStorage.getItem(BENCHMARK_CACHE_KEY) || '{}'); }catch(e){ return {}; }
-  }
-  function saveBenchmarkDiskCache(c){
-    try{ localStorage.setItem(BENCHMARK_CACHE_KEY, JSON.stringify(c)); }catch(e){ /* storage full/unavailable — just skip caching */ }
-  }
+  function loadBenchmarkDiskCache(){ try{ return JSON.parse(localStorage.getItem(BENCHMARK_CACHE_KEY) || '{}'); }catch(e){ return {}; } }
+  function saveBenchmarkDiskCache(c){ try{ localStorage.setItem(BENCHMARK_CACHE_KEY, JSON.stringify(c)); }catch(e){} }
 
-  // Wraps fetch with a timeout so one slow/hanging proxy doesn't block the whole
-  // chain — we want to move on to the next proxy quickly rather than wait forever.
-  async function fetchWithTimeout(url, ms){
-    const controller = new AbortController();
-    const timer = setTimeout(()=> controller.abort(), ms);
-    try{
-      return await fetch(url, { signal: controller.signal });
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  // Free CORS proxies are individually flaky/rate-limited, which is why one
-  // benchmark can succeed while another (fetched moments later) fails outright —
-  // it's not usually the ticker symbol, it's whichever proxy answered that request.
-  // Trying several proxies per request makes a single flaky one a non-issue.
-  async function fetchViaProxy(targetUrl){
-    return pfRace(targetUrl);
-  }
-
-  // Fetches+parses a single Yahoo symbol's chart data. Returns a points array,
-  // or throws if that symbol has no usable data.
-  async function fetchYahooSymbol(symbol){
-    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5y&interval=1d`;
-    const data = await fetchViaProxy(yahooUrl);
-    const result = data && data.chart && data.chart.result && data.chart.result[0];
-    if(!result) throw new Error('no result in Yahoo response for '+symbol);
-    const ts = result.timestamp || [];
-    const closes = (result.indicators && result.indicators.quote && result.indicators.quote[0] && result.indicators.quote[0].close) || [];
-    const points = ts.map((t,i)=> ({ date: new Date(t*1000).toISOString().slice(0,10), close: closes[i] }))
-      .filter(p=> p.close!=null && !isNaN(p.close));
-    if(!points.length) throw new Error('empty series for '+symbol);
-    return points;
-  }
-
-  // Returns [{date:'YYYY-MM-DD', close:number}, ...] for a benchmark key, or null
-  // if it couldn't be loaded from cache or network. Some index symbols are served
-  // inconsistently (or renamed/discontinued) by Yahoo's public endpoint, so each
-  // benchmark can list alternate symbols in yahooAlt — they're tried in order and
-  // the first one that returns real data wins. On top of that, each individual
-  // attempt cycles through several CORS proxies (see fetchViaProxy) since a proxy
-  // being down/rate-limited — not the symbol being wrong — is the usual cause of
-  // one benchmark showing "unavailable" while another loads fine.
   async function fetchBenchmarkSeries(key, attempt){
     const cfg = BENCHMARK_TICKERS[key];
     if(!cfg) return null;
-    const disk = loadBenchmarkDiskCache();
-    const cached = disk[key];
-    if(cached && (Date.now()-cached.fetchedAt) < BENCHMARK_CACHE_TTL){
-      return cached.points;
-    }
-    const candidates = [cfg.yahoo, ...(cfg.yahooAlt || [])];
+    const disk = loadBenchmarkDiskCache(), cached = disk[key];
+    if(cached && (Date.now()-cached.fetchedAt) < BENCHMARK_CACHE_TTL) return cached.points;
+    if(!bkReady()) return cached ? cached.points : null;
+    const to = todayKey(), fromD = new Date(); fromD.setDate(fromD.getDate()-1820);
     let lastErr = null;
-    for(const symbol of candidates){
+    for(const symbol of cfg.symbols){
       try{
-        const points = await fetchYahooSymbol(symbol);
-        disk[key] = { points, fetchedAt: Date.now(), symbol };
+        const r = await bkGet('/candles', {symbol:symbol, interval:'day', from: todayKey(fromD), to:to, broker: bkCfg().pref}, 40000);
+        const points = (r.candles||[]).map(function(c){ return {date: bkIstDate(c.t), close: c.c}; }).filter(function(p){ return p.close!=null && !isNaN(p.close); });
+        if(!points.length) throw new Error('empty series for '+symbol);
+        disk[key] = { points:points, fetchedAt: Date.now(), symbol:symbol, source:r.source };
         saveBenchmarkDiskCache(disk);
         return points;
-      }catch(err){
-        lastErr = err;
-        console.warn('Benchmark fetch failed for', key, 'symbol', symbol, err);
-      }
+      }catch(err){ lastErr = err; console.warn('Benchmark fetch failed for', key, symbol, err.message); if(err.code==='no_proxy' || err.code==='kite_login') break; }
     }
-    // Every symbol/proxy combo failed this round — likely a transient outage
-    // across proxies rather than a bad symbol, so retry once after a short pause
-    // before finally giving up and falling back to stale cache (if any).
-    if(!attempt){
-      await new Promise(r=> setTimeout(r, 1500));
-      return fetchBenchmarkSeries(key, 1);
-    }
-    console.warn('All symbols failed for benchmark', key, lastErr);
-    return cached ? cached.points : null; // fall back to stale cache if we have one
+    if(!attempt && lastErr && lastErr.code!=='no_proxy' && lastErr.code!=='kite_login'){ await new Promise(function(r){ setTimeout(r,1500); }); return fetchBenchmarkSeries(key, 1); }
+    return cached ? cached.points : null;
   }
 
   // Loads (or reuses this session's already-loaded) data for a benchmark key.
@@ -6886,7 +7238,7 @@
       const data = await ensureBenchmarkLoaded(key);
       if(opts.stillActive && !opts.stillActive()) return; // a newer render has taken over this chart — stop here
       if(data==='error' || !data){
-        seriesList[placeholderIdx] = { key, label: cfg.label+' (unavailable)', color: cfg.color, points: [], visible:false };
+        seriesList[placeholderIdx] = { key, label: cfg.label+(bkReady()?' (unavailable)':' (connect a broker)'), color: cfg.color, points: [], visible:false };
       } else {
         const rebased = rebaseToPercent(data, p=>p.date, p=>p.close, fromKey, toKey);
         seriesList[placeholderIdx] = { key, label: cfg.label, color: cfg.color, points: rebased, visible: true };
@@ -7384,13 +7736,16 @@
       // lower than the live sum, the live sum IS the true peak; this max()
       // guarantees the two stats can never contradict each other on screen.
       const allTimeCap = Math.max(maxCapitalDeployed(trades, null, null), capitalDeployed);
+      const heroUnreal = trades.filter(t=> !t.exitDT).reduce((s,t)=>{ const u=parseFloat(t.unrealizedPnl); return isNaN(u)?s:s+u; }, 0);
+      const heroHasUnreal = trades.some(t=> !t.exitDT && !isNaN(parseFloat(t.unrealizedPnl)));
       heroEl.className = 'td-hero-card' + (trades.length ? (m.net>=0?' pos':' neg') : '');
       heroEl.innerHTML = `
-        <div class="td-hero-lbl">Net P&amp;L · All Time</div>
+        <div class="td-hero-lbl">Realised P&amp;L · All Time</div>
         <div class="td-hero-value ${m.net>=0?'pos':'neg'}">${fmtPnl(Math.round(m.net))}</div>
         <div class="td-hero-stats-row">
           <div class="td-hero-stat"><div class="td-hero-stat-lbl">Today</div><div class="td-hero-stat-val ${todayPnl>=0?'pos':'neg'}">${fmtPnl(Math.round(todayPnl))}</div></div>
           <div class="td-hero-stat"><div class="td-hero-stat-lbl">Last 7 Days</div><div class="td-hero-stat-val ${weekPnl>=0?'pos':'neg'}">${fmtPnl(Math.round(weekPnl))}</div></div>
+          <div class="td-hero-stat"><div class="td-hero-stat-lbl">Unrealised${liveQuotesCount()?' · live':''}</div><div class="td-hero-stat-val ${heroUnreal>=0?'pos':'neg'}">${heroHasUnreal?fmtPnl(Math.round(heroUnreal)):'—'}</div></div>
           <div class="td-hero-stat"><div class="td-hero-stat-lbl">Capital Deployed Right Now</div><div class="td-hero-stat-val">${capitalDeployed?fmtCapitalStat(capitalDeployed):'—'}</div></div>
           <div class="td-hero-stat"><div class="td-hero-stat-lbl">Peak Capital Deployed</div><div class="td-hero-stat-val">${allTimeCap?fmtCapitalStat(allTimeCap):'—'}</div></div>
         </div>`;
@@ -8300,368 +8655,15 @@
   }
 
   // ---- Sub-navigation (Overview / History / Calendar / Analytics / New Trade) ----
-
-  // ================= Portfolio: live realised / unrealised P&L + chart with buy/sell markers =================
-  // Speed design: (1) last prices are cached on-device, so the tab paints instantly and refreshes behind the scenes;
-  // (2) every price request RACES all proxies at once (first good answer wins) instead of trying them one by one;
-  // (3) quotes for all holdings load in parallel and each row updates the moment its price lands;
-  // (4) polling is 8s while NSE is open (9:15–15:30 IST, Mon–Fri), slow otherwise, and paused when the tab is hidden;
-  // (5) the chart's last candle is updated live from the same quote — no chart reload.
-  var PF = { quotes:{}, inflight:{}, barCache:{}, sel:null, mode:'lw', range:null, period:'all', chart:null, series:null, bars:[], chartKey:null, lines:[], ro:null, busy:false, lastRun:0, raf:0 };
-  const PF_QKEY = 'fv_pf_quotes_v1';
-  try{ PF.quotes = JSON.parse(localStorage.getItem(PF_QKEY)||'{}') || {}; }catch(e){ PF.quotes = {}; }
-  function pfSaveQuotes(){ try{ localStorage.setItem(PF_QKEY, JSON.stringify(PF.quotes)); }catch(e){} }
-
-  // ---- IST market clock ----
-  function pfIstParts(){
-    const p = new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date());
-    const g = t=>(p.find(x=>x.type===t)||{}).value;
-    return { wd:g('weekday'), min:(parseInt(g('hour'),10)%24)*60+parseInt(g('minute'),10) };
-  }
-  function pfMarketOpen(){ const c=pfIstParts(); return c.wd!=='Sat' && c.wd!=='Sun' && c.min>=555 && c.min<=930; }
-  function pfIstDate(){ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata'}).format(new Date()); }
-  const pfTtl = ()=> pfMarketOpen() ? 8000 : 300000;
-
-  // ---- Fast fetch: race every route simultaneously; optional own Cloudflare Worker goes first ----
-  function pfRace(target){
-    const enc = encodeURIComponent(target);
-    let custom = ''; try{ custom = (localStorage.getItem('fv_pf_proxy')||'').trim(); }catch(e){}
-    const urls = [];
-    if(custom) urls.push(custom + (custom.indexOf('?')>-1?'&':'?') + 'url=' + enc);
-    urls.push('https://api.allorigins.win/raw?url='+enc, 'https://corsproxy.io/?url='+enc, 'https://api.codetabs.com/v1/proxy?quest='+enc);
-    const ctrls = urls.map(()=>new AbortController());
-    return new Promise((resolve,reject)=>{
-      let fails = 0, done = false;
-      urls.forEach((u,i)=>{
-        const to = setTimeout(()=>ctrls[i].abort(), 6000);
-        fetch(u,{signal:ctrls[i].signal})
-          .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-          .then(j=>{
-            if(!(j && j.chart && j.chart.result && j.chart.result[0])) throw new Error('bad payload');
-            clearTimeout(to); if(done) return; done = true;
-            ctrls.forEach((c,k)=>{ if(k!==i) try{ c.abort(); }catch(e){} });
-            resolve(j);
-          })
-          .catch(e=>{ clearTimeout(to); if(++fails===urls.length && !done) reject(e); });
-      });
-    });
-  }
-
-  function pfSymbol(tk){
-    const m = (db.symbolMap||{})[tk]; if(m) return m;
-    let s = String(tk||'').trim().toUpperCase();
-    if(/^\^|\.(NS|BO)$/.test(s)) return s;
-    return s.replace(/-EQ$/,'').replace(/\s+/g,'') + '.NS';
-  }
-  function pfTVSymbol(sym){
-    if(sym==='^NSEI') return 'NSE:NIFTY';
-    if(sym==='^NSEBANK') return 'NSE:BANKNIFTY';
-    if(/\.NS$/.test(sym)) return 'NSE:'+sym.slice(0,-3).replace(/&/g,'_');
-    if(/\.BO$/.test(sym)) return 'BSE:'+sym.slice(0,-3).replace(/&/g,'_');
-    return sym;
-  }
-  function pfIsDark(){
-    const m = (getComputedStyle(document.body).backgroundColor||'').match(/\d+/g);
-    return m ? (0.299*m[0]+0.587*m[1]+0.114*m[2]) < 128 : false;
-  }
-  function pfCss(v, fb){ return (getComputedStyle(document.documentElement).getPropertyValue(v)||'').trim() || fb; }
-
-  // ---- Quotes ----
-  function pfFetchQuote(sym, force){
-    const c = PF.quotes[sym];
-    const ttl = (c && c.ok) ? pfTtl() : 20000;
-    if(c && !force && Date.now()-c.at < ttl) return Promise.resolve(c);
-    if(PF.inflight[sym]) return PF.inflight[sym];
-    const prevPrice = (c && c.ok) ? c.price : null;
-    const prom = pfRace('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(sym)+'?range=1d&interval=1d')
-      .then(d=>{
-        const m = d.chart.result[0].meta;
-        if(!m || m.regularMarketPrice==null) throw new Error('no price');
-        const q = { ok:true, price:m.regularMarketPrice, prev:(m.chartPreviousClose!=null?m.chartPreviousClose:m.previousClose), hi:m.regularMarketDayHigh, lo:m.regularMarketDayLow, at:Date.now() };
-        if(prevPrice!=null && q.price!==prevPrice){ q.chg = q.price>prevPrice?1:-1; q.chgAt = Date.now(); }
-        return PF.quotes[sym] = q;
-      })
-      .catch(()=>{
-        if(c && c.ok) return c;                       // keep the last good price on screen instead of blanking it
-        return PF.quotes[sym] = { ok:false, at:Date.now() };
-      })
-      .finally(()=>{ delete PF.inflight[sym]; pfSaveQuotes(); });
-    return PF.inflight[sym] = prom;
-  }
-
-  function pfOpenPositions(){
-    const g = {};
-    (db.trades||[]).forEach(t=>{
-      const q = parseFloat(t.qty), e = parseFloat(t.entryPrice);
-      if(t.exitDT || t.exitPrice || !(q>0) || !(e>0) || !t.ticker) return;
-      const dir = t.direction==='short' ? 'short' : 'long', k = t.ticker+'|'+dir;
-      const o = g[k] || (g[k] = { ticker:t.ticker, dir, qty:0, cost:0, mark:null });
-      o.qty += q; o.cost += q*e;
-      if(t.markPrice!==undefined && t.markPrice!=='' && !isNaN(parseFloat(t.markPrice))) o.mark = parseFloat(t.markPrice);
-    });
-    return Object.values(g).map(o=>{
-      o.avg = o.cost/o.qty; o.sym = pfSymbol(o.ticker);
-      const q = PF.quotes[o.sym], sign = o.dir==='short' ? -1 : 1;
-      o.ltp = (q && q.ok) ? q.price : o.mark;
-      o.live = !!(q && q.ok);
-      o.upnl = o.ltp!=null ? (o.ltp-o.avg)*o.qty*sign : null;
-      o.upct = o.ltp!=null ? ((o.ltp-o.avg)/o.avg)*100*sign : null;
-      o.day = (q && q.ok && q.prev!=null) ? (q.price-q.prev)*o.qty*sign : null;
-      o.flash = (q && q.chgAt && Date.now()-q.chgAt<1500) ? (q.chg>0?'pf-up':'pf-dn') : '';
-      return o;
-    });
-  }
-  function pfClosedTrades(){
-    const fy = currentFyKey(), mon = todayKey().slice(0,7);
-    return (db.trades||[]).filter(t=>{
-      if(!t.exitPrice || t.pnl===''|| t.pnl==null || isNaN(parseFloat(t.pnl))) return false;
-      const d = (t.exitDT||t.date||'').slice(0,10);
-      if(PF.period==='month') return d.slice(0,7)===mon;
-      if(PF.period==='fy') return fyKeyForDate(d)===fy;
-      return true;
-    });
-  }
-  const pfCol = v => v==null ? 'var(--ink-faint)' : (v>=0 ? 'var(--teal)' : 'var(--rose)');
-  const pfPct = v => v==null ? '—' : (v>=0?'+':'')+v.toFixed(2)+'%';
-  const pfPanelActive = ()=>{ const p=document.getElementById('tpanel-positions'); return !!(p && p.classList.contains('active')); };
-
-  function pfRender(){
-    const sumEl = document.getElementById('pfSummary');
-    if(!sumEl) return;
-    const open = pfOpenPositions(), closed = pfClosedTrades();
-    const real = closed.reduce((s,t)=>s+parseFloat(t.pnl),0);
-    const withLtp = open.filter(o=>o.upnl!=null);
-    const unreal = withLtp.reduce((s,o)=>s+o.upnl,0);
-    const invested = open.reduce((s,o)=>s+o.cost,0);
-    const curVal = withLtp.reduce((s,o)=>s+o.ltp*o.qty,0);
-    const day = open.reduce((s,o)=>s+(o.day||0),0);
-    const hasDay = open.some(o=>o.day!=null);
-    const stat = (l,v,c,sub)=>'<div class="td-hero-stat"><div class="td-hero-stat-lbl">'+l+'</div><div class="td-hero-stat-val" style="color:'+(c||'inherit')+'">'+v+'</div>'+(sub?'<div class="td-card-sub" style="display:block;margin-top:2px;">'+sub+'</div>':'')+'</div>';
-    sumEl.innerHTML =
-      stat('Unrealised', open.length? fmtMoney(unreal):'—', open.length?pfCol(unreal):'', open.length&&invested? pfPct(unreal/invested*100):'') +
-      stat('Realised', fmtMoney(real), pfCol(real), closed.length+' closed') +
-      stat('Total', fmtMoney(real+unreal), pfCol(real+unreal)) +
-      stat('Invested', open.length? fmtMoney(invested):'—') +
-      stat('Current value', open.length? fmtMoney(curVal):'—') +
-      stat('Today', hasDay? fmtMoney(day):'—', hasDay?pfCol(day):'');
-
-    const missing = open.filter(o=>o.ltp==null).length;
-    const times = open.map(o=>PF.quotes[o.sym]).filter(q=>q&&q.ok).map(q=>q.at);
-    const newest = times.length ? Math.max.apply(null,times) : 0;
-    const hhmmss = newest ? new Date(newest).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '';
-    const mo = pfMarketOpen();
-    const upd = document.getElementById('pfUpdated');
-    if(!open.length) upd.textContent = 'No open positions.';
-    else if(!newest) upd.innerHTML = PF.busy ? '<span class="pf-dot busy"></span> Fetching live prices…' : 'No live prices yet — tap Refresh';
-    else upd.innerHTML = (mo ? '<span class="pf-dot'+((Date.now()-newest)<30000?'':' busy')+'"></span> Live · '+hhmmss+' · refreshes every 8s' : 'Market closed · showing last traded prices ('+hhmmss+')')
-      + (missing ? ' · '+missing+' symbol(s) not found — set the Yahoo symbol in the chart card' : '');
-
-    const th = h=>'<th style="text-align:'+(h[1]||'right')+'">'+h[0]+'</th>';
-    document.getElementById('pfOpenTable').innerHTML = !open.length ? '<div class="td-empty-note">No open trades. Log a trade without an exit and it shows up here.</div>' :
-      '<table style="width:100%;"><thead><tr>'+[['Stock','left'],['Qty'],['Avg'],['LTP'],['P&L'],['%']].map(th).join('')+'</tr></thead><tbody>'+
-      open.sort((a,b)=>b.cost-a.cost).map(o=>'<tr data-pf-tk="'+escapeHtml(o.ticker)+'" style="cursor:pointer;"><td><b>'+escapeHtml(o.ticker)+'</b>'+(o.dir==='short'?' <span class="trade-dir-badge short">S</span>':'')+'</td><td style="text-align:right">'+o.qty+'</td><td style="text-align:right">'+o.avg.toFixed(2)+'</td><td style="text-align:right" class="'+o.flash+'">'+(o.ltp!=null?o.ltp.toFixed(2)+(o.live?'':'*'):'—')+'</td><td style="text-align:right;color:'+pfCol(o.upnl)+'">'+(o.upnl!=null?fmtPnl(o.upnl):'—')+'</td><td style="text-align:right;color:'+pfCol(o.upct)+'">'+pfPct(o.upct)+'</td></tr>').join('')+'</tbody></table>'+(open.some(o=>o.ltp!=null&&!o.live)?'<div class="td-card-sub" style="display:block;margin-top:6px;">* last imported mark price, not live</div>':'');
-
-    const by = {};
-    closed.forEach(t=>{ const b = by[t.ticker] || (by[t.ticker]={ticker:t.ticker,n:0,w:0,pnl:0}); b.n++; b.pnl+=parseFloat(t.pnl); if(parseFloat(t.pnl)>0) b.w++; });
-    const rows = Object.values(by).sort((a,b)=>b.pnl-a.pnl);
-    document.getElementById('pfRealTable').innerHTML = !rows.length ? '<div class="td-empty-note">No closed trades in this period.</div>' :
-      '<table style="width:100%;"><thead><tr>'+[['Stock','left'],['Trades'],['Win %'],['Realised P&L']].map(th).join('')+'</tr></thead><tbody>'+
-      rows.map(r=>'<tr data-pf-tk="'+escapeHtml(r.ticker)+'" style="cursor:pointer;"><td><b>'+escapeHtml(r.ticker)+'</b></td><td style="text-align:right">'+r.n+'</td><td style="text-align:right">'+Math.round(r.w/r.n*100)+'%</td><td style="text-align:right;color:'+pfCol(r.pnl)+'">'+fmtPnl(r.pnl)+'</td></tr>').join('')+'</tbody></table>';
-  }
-  function pfRenderSoon(){
-    if(PF.raf || !pfPanelActive()) return;
-    PF.raf = requestAnimationFrame(()=>{ PF.raf = 0; try{ pfRender(); }catch(e){ console.warn(e); } });
-  }
-
-  function pfRefresh(force){
-    const syms = Array.from(new Set(pfOpenPositions().map(o=>o.sym)));
-    if(!syms.length){ PF.lastRun = Date.now(); return Promise.resolve(); }
-    PF.busy = true; pfRenderSoon();
-    return Promise.all(syms.map(sym=> pfFetchQuote(sym, force).then(q=>{ pfRenderSoon(); pfLiveTick(sym); return q; })))
-      .then(()=>{ PF.busy = false; PF.lastRun = Date.now(); pfRenderSoon(); });
-  }
-
-  // Public entry point (called when the Portfolio tab opens and from the dashboard): paint cached data NOW, refresh behind it.
-  function renderPortfolio(fetchLive){
-    if(!document.getElementById('pfSummary')) return;
-    pfRender();
-    pfFillTickerSelect();
-    if(fetchLive){
-      pfRefresh(fetchLive==='force');
-      const box = document.getElementById('pfChartBox');
-      if(box && box.childElementCount===0) pfDrawChart();
-    }
-  }
-
-  function pfFillTickerSelect(){
-    const sel = document.getElementById('pfTickerSel'); if(!sel) return;
-    const openSet = new Set((db.trades||[]).filter(t=>!t.exitDT&&!t.exitPrice).map(t=>t.ticker));
-    const all = Array.from(new Set((db.trades||[]).map(t=>t.ticker).filter(Boolean)));
-    all.sort((a,b)=> (openSet.has(b)-openSet.has(a)) || a.localeCompare(b));
-    if(!all.length){ sel.innerHTML='<option>No trades yet</option>'; return; }
-    if(!PF.sel || all.indexOf(PF.sel)<0) PF.sel = all[0];
-    const html = all.map(t=>'<option value="'+escapeHtml(t)+'"'+(t===PF.sel?' selected':'')+'>'+escapeHtml(t)+(openSet.has(t)?' (open)':'')+'</option>').join('');
-    if(sel.innerHTML!==html) sel.innerHTML = html;
-    const inp = document.getElementById('pfSymInput');
-    if(inp && document.activeElement!==inp) inp.value = pfSymbol(PF.sel);
-  }
-
-  function pfAutoRange(tk){
-    const ds = (db.trades||[]).filter(t=>t.ticker===tk&&t.entryDT).map(t=>t.entryDT.slice(0,10)).sort();
-    if(!ds.length) return '1y';
-    const days = (Date.now()-new Date(ds[0]+'T00:00:00').getTime())/864e5;
-    return days<=170?'6mo': days<=350?'1y': days<=700?'2y':'5y';
-  }
-
-  // ---- Chart ----
-  function pfLoadBars(key){
-    try{ const c = JSON.parse(localStorage.getItem('fv_pf_bars_'+key)||'null'); return (c && c.bars && c.bars.length) ? c : null; }catch(e){ return null; }
-  }
-  function pfSaveBars(key, c){
-    if(c.bars.length>700) return;
-    try{ localStorage.setItem('fv_pf_bars_'+key, JSON.stringify(c)); }catch(e){}
-  }
-  async function pfFetchBars(sym, range){
-    const d = await pfRace('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(sym)+'?range='+range+'&interval=1d');
-    const r = d.chart.result[0], q = r.indicators.quote[0];
-    const bars = r.timestamp.map((t,i)=>({ time:new Date(t*1000).toISOString().slice(0,10), open:q.open[i], high:q.high[i], low:q.low[i], close:q.close[i] }))
-      .filter(b=>b.open!=null&&b.high!=null&&b.low!=null&&b.close!=null);
-    if(!bars.length) throw new Error('empty');
-    return bars;
-  }
-
-  function pfApplyMarkers(){
-    if(!PF.series) return;
-    const tk = PF.sel, note = document.getElementById('pfChartNote');
-    const up = pfCss('--teal','#26a69a'), dn = pfCss('--rose','#ef5350');
-    const times = PF.bars.map(b=>b.time);
-    const snap = d=>{ for(let i=0;i<times.length;i++) if(times[i]>=d) return times[i]; return null; };
-    const marks = []; let skipped = 0;
-    (db.trades||[]).filter(t=>t.ticker===tk).forEach(t=>{
-      const short = t.direction==='short', q = t.qty;
-      const add = (dt, price, isBuy)=>{
-        if(!dt || price===''||price==null) return;
-        const d = dt.slice(0,10); if(d < times[0]){ skipped++; return; }
-        const tm = snap(d); if(!tm){ skipped++; return; }
-        marks.push({ time:tm, position:isBuy?'belowBar':'aboveBar', shape:isBuy?'arrowUp':'arrowDown', color:isBuy?up:dn, text:(isBuy?'B ':'S ')+(q?q+'@':'')+parseFloat(price) });
-      };
-      add(t.entryDT, t.entryPrice, !short);
-      add(t.exitDT, t.exitPrice, short);
-    });
-    marks.sort((a,b)=>a.time<b.time?-1:a.time>b.time?1:0);
-    PF.series.setMarkers(marks);
-    PF.lines.forEach(l=>{ try{ PF.series.removePriceLine(l); }catch(e){} }); PF.lines = [];
-    pfOpenPositions().filter(o=>o.ticker===tk).forEach(o=> PF.lines.push(PF.series.createPriceLine({ price:o.avg, color:up, lineWidth:1, lineStyle:2, axisLabelVisible:true, title:'Avg '+(o.dir==='short'?'sell':'buy') })));
-    if(note) note.textContent = marks.length+' trade marker(s)'+(skipped?' · '+skipped+' older than this range (pick a longer one)':'');
-  }
-
-  function pfBuildChart(key, bars){
-    const box = document.getElementById('pfChartBox');
-    if(PF.chart){ try{ PF.chart.remove(); }catch(e){} PF.chart=null; PF.series=null; }
-    if(PF.ro){ PF.ro.disconnect(); PF.ro=null; }
-    box.innerHTML = '';
-    const up = pfCss('--teal','#26a69a'), dn = pfCss('--rose','#ef5350'), txt = pfCss('--ink-dim','#888'), grid = pfCss('--line','rgba(128,128,128,.2)');
-    const chart = LightweightCharts.createChart(box, { width:box.clientWidth, height:box.clientHeight,
-      layout:{ background:{type:'solid',color:'transparent'}, textColor:txt }, grid:{ vertLines:{color:grid}, horzLines:{color:grid} },
-      rightPriceScale:{ borderColor:grid }, timeScale:{ borderColor:grid, timeVisible:false }, crosshair:{ mode:0 } });
-    const series = chart.addCandlestickSeries({ upColor:up, downColor:dn, borderUpColor:up, borderDownColor:dn, wickUpColor:up, wickDownColor:dn });
-    series.setData(bars);
-    PF.chart = chart; PF.series = series; PF.bars = bars.slice(); PF.chartKey = key; PF.lines = [];
-    pfApplyMarkers();
-    chart.timeScale().fitContent();
-    PF.ro = new ResizeObserver(()=>{ if(PF.chart) PF.chart.applyOptions({ width:box.clientWidth }); }); PF.ro.observe(box);
-    pfLiveTick(PF.sel ? pfSymbol(PF.sel) : '');
-  }
-
-  // Push the latest quote into the chart's current candle — no reload, no flicker.
-  function pfLiveTick(sym){
-    if(!PF.series || !sym || !PF.chartKey || PF.chartKey.split('|')[0]!==sym || !PF.bars.length) return;
-    const q = PF.quotes[sym]; if(!q || !q.ok) return;
-    const last = PF.bars[PF.bars.length-1], today = pfIstDate(); let bar = null;
-    if(last.time===today) bar = { time:today, open:last.open, high:Math.max(last.high,q.price,q.hi||0), low:Math.min(last.low,q.price,q.lo||1e12), close:q.price };
-    else if(last.time<today && pfMarketOpen()) bar = { time:today, open:q.price, high:Math.max(q.price,q.hi||q.price), low:Math.min(q.price,q.lo||q.price), close:q.price };
-    if(!bar) return;
-    try{ PF.series.update(bar); if(last.time===today) PF.bars[PF.bars.length-1]=bar; else PF.bars.push(bar); }catch(e){}
-  }
-
-  async function pfDrawChart(){
-    const box = document.getElementById('pfChartBox'), note = document.getElementById('pfChartNote');
-    if(!box || !PF.sel) return;
-    const tk = PF.sel, sym = pfSymbol(tk);
-    document.querySelectorAll('#pfRangeToggle .eq-range-btn').forEach(b=>b.style.display = PF.mode==='lw'?'':'none');
-    if(PF.mode==='tv'){
-      if(PF.chart){ try{ PF.chart.remove(); }catch(e){} PF.chart=null; PF.series=null; PF.chartKey=null; }
-      if(PF.ro){ PF.ro.disconnect(); PF.ro=null; }
-      box.innerHTML = ''; note.textContent = '';
-      const w = document.createElement('div'); w.className='tradingview-widget-container'; w.style.cssText='height:100%;width:100%;';
-      const inner = document.createElement('div'); inner.className='tradingview-widget-container__widget'; inner.style.cssText='height:100%;width:100%;';
-      w.appendChild(inner);
-      const sc = document.createElement('script'); sc.async = true;
-      sc.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-      sc.text = JSON.stringify({ autosize:true, symbol:pfTVSymbol(sym), interval:'D', timezone:'Asia/Kolkata', theme:pfIsDark()?'dark':'light', style:'1', locale:'en', allow_symbol_change:true, hide_side_toolbar:false, support_host:'https://www.tradingview.com' });
-      w.appendChild(sc); box.appendChild(w); return;
-    }
-    if(!window.LightweightCharts){ box.innerHTML='<div class="td-empty-note">Chart library failed to load — check your connection or use the TradingView tab.</div>'; return; }
-    const range = PF.range || pfAutoRange(tk);
-    document.querySelectorAll('#pfRangeToggle .eq-range-btn').forEach(b=>b.classList.toggle('on', b.dataset.r===range));
-    const key = sym+'|'+range;
-    const cached = PF.barCache[key] || (PF.barCache[key] = pfLoadBars(key));
-    if(cached){ pfBuildChart(key, cached.bars); }           // instant paint from cache
-    else { box.innerHTML = '<div class="td-empty-note">Loading '+escapeHtml(sym)+'…</div>'; note.textContent=''; }
-    const staleAfter = pfMarketOpen() ? 60000 : 600000;
-    if(cached && Date.now()-cached.at < staleAfter) return;
-    try{
-      const bars = await pfFetchBars(sym, range);
-      const fresh = { bars, at:Date.now() };
-      PF.barCache[key] = fresh; pfSaveBars(key, fresh);
-      if(PF.sel!==tk || PF.mode!=='lw' || (PF.range||pfAutoRange(tk))!==range) return;   // user moved on while loading
-      if(PF.series && PF.chartKey===key){ PF.series.setData(bars); PF.bars = bars.slice(); pfApplyMarkers(); pfLiveTick(sym); }
-      else pfBuildChart(key, bars);
-    }catch(e){
-      if(!cached) box.innerHTML = '<div class="td-empty-note">Couldn\'t load price data for '+escapeHtml(sym)+'. If this isn\'t an NSE cash stock, type its Yahoo symbol above and tap Save symbol.</div>';
-    }
-  }
-
-  (function pfWire(){
-    const $ = id=>document.getElementById(id);
-    if(!$('pfRefreshBtn')) return;
-    $('pfRefreshBtn').addEventListener('click', ()=> renderPortfolio('force'));
-    $('pfTickerSel').addEventListener('change', e=>{ PF.sel=e.target.value; PF.range=null; $('pfSymInput').value=pfSymbol(PF.sel); pfDrawChart(); });
-    $('pfPeriod').addEventListener('click', e=>{ const b=e.target.closest('[data-p]'); if(!b) return; PF.period=b.dataset.p;
-      $('pfPeriod').querySelectorAll('.eq-range-btn').forEach(x=>x.classList.toggle('on',x===b)); pfRender(); });
-    $('pfModeToggle').addEventListener('click', e=>{ const b=e.target.closest('[data-m]'); if(!b) return; PF.mode=b.dataset.m;
-      $('pfModeToggle').querySelectorAll('.eq-range-btn').forEach(x=>x.classList.toggle('on',x===b)); pfDrawChart(); });
-    $('pfRangeToggle').addEventListener('click', e=>{ const b=e.target.closest('[data-r]'); if(!b) return; PF.range=b.dataset.r; pfDrawChart(); });
-    $('pfSymSave').addEventListener('click', ()=>{ const v=$('pfSymInput').value.trim().toUpperCase(); if(!v||!PF.sel) return;
-      if(!db.symbolMap) db.symbolMap={}; db.symbolMap[PF.sel]=v; saveDB(); delete PF.quotes[v]; renderPortfolio('force'); pfDrawChart(); });
-    $('tpanel-positions').addEventListener('click', e=>{ const r=e.target.closest('[data-pf-tk]'); if(!r) return;
-      PF.sel=r.dataset.pfTk; PF.range=null; $('pfTickerSel').value=PF.sel; $('pfSymInput').value=pfSymbol(PF.sel); pfDrawChart(); $('pfChartBox').scrollIntoView({behavior:'smooth',block:'center'}); });
-    const px = $('pfProxyInput');
-    if(px){ try{ px.value = localStorage.getItem('fv_pf_proxy')||''; }catch(e){}
-      $('pfProxySave').addEventListener('click', ()=>{ try{ localStorage.setItem('fv_pf_proxy', px.value.trim()); }catch(e){} showToast(px.value.trim()?'Fast proxy saved.':'Fast proxy cleared.', 'success'); renderPortfolio('force'); }); }
-
-    // Background scheduler: 8s while the Portfolio tab is on screen during market hours; gentle prefetch elsewhere so it's
-    // already warm when you open the tab. Skips entirely when the page is hidden.
-    setInterval(()=>{
-      if(document.hidden || PF.busy) return;
-      if(!(db.trades||[]).some(t=>!t.exitDT && !t.exitPrice && t.ticker)) return;
-      const viewOn = $('view-trades') && $('view-trades').classList.contains('active');
-      const mo = pfMarketOpen();
-      const gap = (viewOn && pfPanelActive()) ? (mo?8000:120000) : (mo?60000:600000);
-      if(Date.now()-PF.lastRun >= gap) pfRefresh(false);
-    }, 2000);
-    document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && pfPanelActive()) pfRefresh(false); });
-    window.addEventListener('online', ()=>{ if(pfPanelActive()) pfRefresh(true); });
-  })();
-
   function renderTradeDashboard(){
-    try{ renderPortfolio(false); }catch(e){}
     renderTradeOverview();
     renderTradeCalendar();
     renderStrategyBreakdown();
     renderRiskPanel();
     try{ renderDisciplinePanel(); }catch(e){}
     try{ renderPeriodsPanel(); }catch(e){}
+    try{ renderPnlPanel(); }catch(e){}
+    try{ if(bkPanelActive('chart')){ tcRefreshTickerList(); tcChromeDirty = true; tcLoad(); } }catch(e){}
   }
 
   // ================= FY / Periods analytics (Indian Financial Year: Apr 1 – Mar 31) =================
@@ -9008,7 +9010,7 @@
     document.querySelectorAll('#view-trades .trade-panel').forEach(p=>p.classList.remove('active'));
     const panel = document.getElementById('tpanel-'+name);
     if(panel) panel.classList.add('active');
-    if(name==='positions'){ try{ renderPortfolio(true); }catch(e){ console.warn(e); } }
+    try{ onTradePanelActivated(name); }catch(e){ console.warn(e); }
   }
   const tradeSubnavEl = document.getElementById('tradeSubnav');
   if(tradeSubnavEl){
@@ -11939,6 +11941,874 @@
     try{ maybeShowDailyGoalReminder(); }catch(e){}
     try{ renderCapitalHistoryUI(); }catch(e){}
   };
+
+
+  // =====================================================================
+  // P&L PANEL — realised vs unrealised as separate components
+  // =====================================================================
+  var plPeriod = 'all';
+
+  function plRange(p){
+    var fy = currentFyKey();
+    if(p==='fy')  return {from: fy+'-04-01', to: (fy+1)+'-03-31', label: fyLabel(fy)};
+    if(p==='lfy') return {from: (fy-1)+'-04-01', to: fy+'-03-31', label: fyLabel(fy-1)};
+    if(p==='3m' || p==='1m'){ var d = new Date(); d.setMonth(d.getMonth()-(p==='3m'?3:1)); return {from: todayKey(d), to:null, label: p==='3m'?'Last 3 months':'Last month'}; }
+    return {from:null, to:null, label:'All time'};
+  }
+
+  // Splits everything into the two components. Realised = closed trades whose
+  // exit date falls in the period (gross, price-based). Unrealised = open
+  // positions marked at the live (or last known) price, as of now.
+  function plCompute(period){
+    var rg = plRange(period), by = {};
+    var get = function(tk){ return by[tk] || (by[tk] = {ticker:tk, realised:0, realisedCount:0, wins:0, unreal:null, qty:0, avg:null, ltp:null, dayPct:null, dayPnl:null, cost:0, value:null, dir:'', live:false, key:bkSymbolKey(tk)}); };
+    var R = {realised:0, count:0, wins:0, losses:0, grossWin:0, grossLoss:0, closedCost:0};
+    var series = {};
+    (db.trades||[]).forEach(function(t){
+      if(!t.exitDT) return;
+      var pnl = parseFloat(t.pnl), d = (t.exitDT||'').slice(0,10);
+      if(isNaN(pnl) || !d) return;
+      if(rg.from && d<rg.from) return; if(rg.to && d>rg.to) return;
+      var row = get(t.ticker||'—'); row.realised += pnl; row.realisedCount++; if(pnl>=0) row.wins++;
+      R.realised += pnl; R.count++; if(pnl>=0){ R.wins++; R.grossWin += pnl; } else { R.losses++; R.grossLoss += -pnl; }
+      var sz = parseFloat(t.posSize); if(!isNaN(sz)) R.closedCost += sz;
+      series[d] = (series[d]||0) + pnl;
+    });
+    var U = {unreal:0, withPrice:0, open:0, cost:0, value:0, dayPnl:0, dayKnown:false, live:0};
+    bkOpenRows().forEach(function(o){
+      var row = get(o.ticker); U.open++; U.cost += o.cost;
+      row.qty += (o.dir==='short'?-1:1)*o.qty; row.avg = o.avg; row.cost += o.cost; row.dir = o.dir; row.key = o.key; row.live = o.live;
+      row.ltp = o.ltp; row.dayPct = o.dayPct; row.dayPnl = o.dayPnl;
+      if(o.unreal!==null){ row.unreal = (row.unreal||0)+o.unreal; row.value = (row.value||0)+o.value; U.unreal += o.unreal; U.withPrice++; U.value += o.value; if(o.live) U.live++; }
+      if(o.dayPnl!==null){ U.dayPnl += o.dayPnl; U.dayKnown = true; }
+    });
+    var rows = Object.keys(by).map(function(k){ var r = by[k]; r.total = r.realised + (r.unreal||0); return r; });
+    var dates = Object.keys(series).sort(), cum = 0, cumPts = dates.map(function(d){ cum += series[d]; return {date:d, v:cum, day:series[d]}; });
+    return {range:rg, R:R, U:U, rows:rows, cumPts:cumPts, total:R.realised+U.unreal};
+  }
+
+  function plMoney(n){ return fmtPnl(Math.round(n)); }
+
+  function plRenderComponents(c){
+    var el = bkEl('plComponents'); if(!el) return;
+    var R = c.R, U = c.U, liveTag = U.live ? '<span class="pl-tag live">live</span>' : '';
+    var winPct = R.count ? Math.round(R.wins/R.count*100) : null;
+    var retPct = U.cost ? (U.unreal/U.cost*100) : null;
+    var card = function(cls, lbl, val, sub, extra){ return '<div class="pl-comp '+cls+'"><div class="lbl">'+lbl+(extra||'')+'</div><div class="val '+(val.cls||'')+'">'+val.txt+'</div><div class="sub">'+sub+'</div></div>'; };
+    el.innerHTML =
+      card(c.total>=0?'pos total':'neg total', 'Total P&amp;L', {txt:plMoney(c.total), cls:c.total>=0?'pos':'neg'}, 'realised + unrealised') +
+      card(R.realised>=0?'pos':'neg', 'Realised', {txt:plMoney(R.realised), cls:R.realised>=0?'pos':'neg'}, R.count ? (R.count+' closed · '+winPct+'% wins') : 'no closed trades in '+c.range.label.toLowerCase(), '<span class="pl-tag">booked</span>') +
+      card(U.withPrice ? (U.unreal>=0?'pos':'neg') : '', 'Unrealised', {txt: U.withPrice ? plMoney(U.unreal) : '—', cls: U.withPrice ? (U.unreal>=0?'pos':'neg') : ''}, U.open ? (U.withPrice+' of '+U.open+' open priced'+(retPct!==null?' · '+bkPct(retPct):'')) : 'no open positions', liveTag || '<span class="pl-tag">open</span>') +
+      card(U.dayKnown ? (U.dayPnl>=0?'pos':'neg') : '', 'Today\'s move', {txt: U.dayKnown ? plMoney(U.dayPnl) : '—', cls: U.dayKnown ? (U.dayPnl>=0?'pos':'neg') : ''}, U.dayKnown ? 'on open positions vs prev close' : 'needs live prices', '');
+  }
+
+  function plRenderWaterfall(c){
+    var el = bkEl('plWaterfall'), sub = bkEl('plWaterfallSub'); if(!el) return;
+    var R = c.R.realised, U = c.U.withPrice ? c.U.unreal : 0, T = R+U;
+    if(sub) sub.textContent = c.range.label+(c.U.open?' · unrealised is as of now':'');
+    if(!c.R.count && !c.U.open){ el.innerHTML = '<div class="td-empty-note">No realised or open positions yet.</div>'; return; }
+    var W = 640, H = 220, padT = 26, padB = 30, padL = 14, padR = 14;
+    var lo = Math.min(0, R, R+U, T), hi = Math.max(0, R, R+U, T), span = (hi-lo)||1;
+    var y = function(v){ return padT + (1-(v-lo)/span)*(H-padT-padB); };
+    var bw = 110, gap = (W-padL-padR-3*bw)/2;
+    var bars = [
+      {lbl:'Realised', a:0, b:R, x:padL, hatch:false},
+      {lbl:'Unrealised', a:R, b:R+U, x:padL+bw+gap, hatch:true},
+      {lbl:'Total', a:0, b:T, x:padL+2*(bw+gap), hatch:false, total:true}
+    ];
+    var svg = '<defs><pattern id="plHatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="7" fill="transparent"/><line x1="0" y1="0" x2="0" y2="7" stroke="rgba(255,255,255,.65)" stroke-width="3"/></pattern></defs>';
+    svg += '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+y(0)+'" y2="'+y(0)+'" stroke="var(--line)"/>';
+    bars.forEach(function(b, i){
+      var top = Math.min(y(b.a), y(b.b)), h = Math.max(2, Math.abs(y(b.a)-y(b.b))), delta = b.b-b.a, col = delta>=0 ? 'var(--teal)' : 'var(--rose)';
+      if(b.total) col = T>=0 ? 'var(--teal-dim)' : 'var(--rose-dim)';
+      svg += '<rect x="'+b.x+'" y="'+top+'" width="'+bw+'" height="'+h+'" rx="5" fill="'+col+'" opacity="'+(b.hatch?0.7:1)+'"/>';
+      if(b.hatch) svg += '<rect x="'+b.x+'" y="'+top+'" width="'+bw+'" height="'+h+'" rx="5" fill="url(#plHatch)"/>';
+      var up = delta>=0, ty = up ? top-8 : top+h+16;
+      svg += '<text x="'+(b.x+bw/2)+'" y="'+ty+'" text-anchor="middle" font-size="13" font-weight="800" font-family="IBM Plex Mono" fill="'+(delta>=0?'var(--teal)':'var(--rose)')+'">'+plMoney(delta)+'</text>';
+      svg += '<text x="'+(b.x+bw/2)+'" y="'+(H-8)+'" text-anchor="middle" font-size="11.5" font-weight="700" font-family="Inter" fill="var(--ink-dim)">'+b.lbl+'</text>';
+      if(i<2){ var nx = bars[i+1].x, cy = y(i===0?R:R+U); svg += '<line x1="'+(b.x+bw)+'" x2="'+nx+'" y1="'+cy+'" y2="'+cy+'" stroke="var(--ink-faint)" stroke-dasharray="3,3"/>'; }
+    });
+    el.innerHTML = '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%; height:auto; display:block;" role="img" aria-label="Realised plus unrealised equals total">'+svg+'</svg>';
+  }
+
+  function plRenderCumulative(c){
+    var el = bkEl('plCumChart'), sub = bkEl('plCumSub'), lg = bkEl('plCumLegend'); if(!el) return;
+    var pts = c.cumPts;
+    if(!pts.length && !c.U.withPrice){ el.innerHTML = '<div class="td-empty-note">Closed trades will build this curve.</div>'; if(lg) lg.innerHTML=''; return; }
+    var realisedEnd = pts.length ? pts[pts.length-1].v : 0, U = c.U.withPrice ? c.U.unreal : 0, today = todayKey();
+    var all = pts.map(function(p){ return {date:p.date, v:p.v, kind:'real'}; });
+    if(!all.length) all.push({date: today, v:0, kind:'real'});
+    var last = all[all.length-1];
+    var ext = null;
+    if(c.U.withPrice){ ext = {date: last.date<today ? today : last.date, v: realisedEnd+U, kind:'total'}; }
+    var t0 = Date.parse(all[0].date+'T00:00:00'), t1 = Date.parse((ext?ext.date:last.date)+'T00:00:00');
+    if(t1<=t0) t1 = t0 + 86400000*7;
+    var W = 640, H = 210, padL = 8, padR = 58, padT = 14, padB = 22;
+    var vals = all.map(function(p){ return p.v; }); if(ext) vals.push(ext.v); vals.push(0);
+    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals), span = (hi-lo)||1; lo -= span*0.06; hi += span*0.06; span = hi-lo;
+    var x = function(d){ return padL + (Date.parse(d+'T00:00:00')-t0)/(t1-t0)*(W-padL-padR); };
+    var y = function(v){ return padT + (1-(v-lo)/span)*(H-padT-padB); };
+    var path = all.map(function(p,i){ return (i?'L':'M')+x(p.date).toFixed(1)+' '+y(p.v).toFixed(1); }).join(' ');
+    var area = path+' L'+x(last.date).toFixed(1)+' '+y(0).toFixed(1)+' L'+x(all[0].date).toFixed(1)+' '+y(0).toFixed(1)+' Z';
+    var col = realisedEnd>=0 ? 'var(--teal)' : 'var(--rose)';
+    var svg = '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+y(0)+'" y2="'+y(0)+'" stroke="var(--line)" stroke-dasharray="3,3"/>';
+    svg += '<path d="'+area+'" fill="'+col+'" opacity=".10"/><path d="'+path+'" fill="none" stroke="'+col+'" stroke-width="2.2" stroke-linejoin="round"/>';
+    [hi-span*0.06, (hi+lo)/2, lo+span*0.06].forEach(function(v){ svg += '<text x="'+(W-padR+6)+'" y="'+(y(v)+4)+'" font-size="10" font-family="IBM Plex Mono" fill="var(--ink-faint)">'+fmtCompactPnl(v)+'</text>'; });
+    svg += '<text x="'+padL+'" y="'+(H-6)+'" font-size="10" fill="var(--ink-faint)" font-family="Inter">'+all[0].date+'</text><text x="'+(W-padR)+'" y="'+(H-6)+'" text-anchor="end" font-size="10" fill="var(--ink-faint)" font-family="Inter">'+(ext?ext.date:last.date)+'</text>';
+    svg += '<circle cx="'+x(last.date)+'" cy="'+y(last.v)+'" r="4" fill="'+col+'"/>';
+    if(ext){
+      svg += '<line x1="'+x(last.date)+'" y1="'+y(last.v)+'" x2="'+x(ext.date)+'" y2="'+y(ext.v)+'" stroke="var(--accent)" stroke-width="2.2" stroke-dasharray="5,4"/>';
+      svg += '<circle cx="'+x(ext.date)+'" cy="'+y(ext.v)+'" r="5" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>';
+    }
+    svg += '<line class="plx" x1="0" x2="0" y1="'+padT+'" y2="'+(H-padB)+'" stroke="var(--ink-faint)" opacity="0"/>';
+    el.innerHTML = '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%; height:auto; display:block;">'+svg+'</svg><div class="eq-tooltip" style="display:none;"></div>';
+    if(lg) lg.innerHTML = '<span><i style="background:'+col+'"></i>Realised (cumulative)</span>'+(ext?'<span><i style="background:var(--accent)"></i>Incl. unrealised today: <b style="font-family:IBM Plex Mono">'+plMoney(ext.v)+'</b></span>':'');
+    if(sub) sub.textContent = all.length+' day'+(all.length===1?'':'s')+' with exits';
+    // hover
+    var svgEl = el.querySelector('svg'), line = el.querySelector('.plx'), tip = el.querySelector('.eq-tooltip');
+    var cand = all.concat(ext?[ext]:[]);
+    var move = function(ev){
+      var r = svgEl.getBoundingClientRect(), px = (ev.clientX-r.left)/r.width*W, best = null, bd = 1e9;
+      cand.forEach(function(p){ var dd = Math.abs(x(p.date)-px); if(dd<bd){ bd = dd; best = p; } });
+      if(!best) return;
+      line.setAttribute('x1', x(best.date)); line.setAttribute('x2', x(best.date)); line.setAttribute('opacity', '.6');
+      tip.innerHTML = '<div style="font-weight:800;">'+best.date+(best.kind==='total'?' · today':'')+'</div><div>'+(best.kind==='total'?'Realised + unrealised':'Cumulative realised')+'</div><div class="eq-tip-pnl '+(best.v>=0?'pos':'neg')+'">'+plMoney(best.v)+'</div>';
+      tip.style.display = 'block'; tip.style.left = Math.max(60, Math.min(r.width-60, ev.clientX-r.left))+'px'; tip.style.top = (y(best.v)/H*r.height)+'px';
+    };
+    var leave = function(){ line.setAttribute('opacity','0'); tip.style.display = 'none'; };
+    svgEl.addEventListener('pointermove', move); svgEl.addEventListener('pointerleave', leave);
+  }
+
+  function plRenderStockBars(c){
+    var el = bkEl('plStockBars'); if(!el) return;
+    var rows = c.rows.filter(function(r){ return r.realised || r.unreal; }).sort(function(a,b){ return Math.abs(b.total)-Math.abs(a.total); }).slice(0,14);
+    if(!rows.length){ el.innerHTML = '<div class="td-empty-note">Nothing to show for this period.</div>'; return; }
+    var mx = Math.max.apply(null, rows.map(function(r){ return Math.max(Math.abs(r.realised), Math.abs(r.unreal||0)); })) || 1;
+    el.innerHTML = rows.map(function(r){
+      var seg = function(v, cls){
+        if(!v) return ''; var w = Math.abs(v)/mx*48, left = v>=0 ? 50 : 50-w;
+        return '<div class="pl-sb-bar '+cls+' '+(v>=0?'pos':'neg')+'" style="left:'+left+'%; width:'+w+'%;" title="'+(cls==='real'?'Realised ':'Unrealised ')+plMoney(v)+'"></div>';
+      };
+      return '<div class="pl-sb-row" data-chart-ticker="'+escapeHtml(r.ticker)+'"><div class="pl-sb-name" title="'+escapeHtml(r.ticker)+'">'+escapeHtml(r.ticker)+'</div>' +
+        '<div class="pl-sb-track"><div class="pl-sb-axis" style="left:50%"></div>'+seg(r.realised,'real')+seg(r.unreal,'unreal')+'</div>' +
+        '<div class="pl-sb-val '+bkSignCls(r.total)+'">'+plMoney(r.total)+'</div></div>';
+    }).join('');
+  }
+
+  function plRenderTable(c){
+    var tbl = bkEl('plTable'), sub = bkEl('plTableSub'); if(!tbl) return;
+    var rows = c.rows.slice().sort(function(a,b){ return Math.abs(b.total)-Math.abs(a.total); });
+    if(!rows.length){ tbl.innerHTML = '<tr><td style="text-align:left; color:var(--ink-faint); padding:24px 0;">No trades yet.</td></tr>'; return; }
+    if(sub) sub.textContent = rows.length+' stock'+(rows.length===1?'':'s');
+    var th = '<tr><th>Stock</th><th>Qty</th><th>Avg buy</th><th>LTP</th><th>Day</th><th>Invested</th><th>Value</th><th>Unrealised</th><th>Realised</th><th>Total</th></tr>';
+    var body = rows.map(function(r){
+      var open = r.qty!==0;
+      return '<tr class="clickable" data-chart-ticker="'+escapeHtml(r.ticker)+'">' +
+        '<td><span class="sym">'+escapeHtml(r.ticker)+'</span><span class="sub">'+(open ? (r.dir==='short'?'Short':'Long')+' · '+(r.live?'live':(r.ltp!==null?'last known':'no price')) : r.realisedCount+' closed')+'</span></td>' +
+        '<td>'+(open ? Math.abs(r.qty) : '—')+'</td><td>'+(open ? bkPx(r.avg) : '—')+'</td>' +
+        '<td data-ltp="'+escapeHtml(r.key||'')+'">'+(open ? bkPx(r.ltp) : '—')+'</td>' +
+        '<td class="'+bkSignCls(r.dayPct)+'">'+(open && r.dayPct!==null ? bkPct(r.dayPct) : '—')+'</td>' +
+        '<td>'+(open ? fmtMoney(r.cost) : '—')+'</td><td>'+(open && r.value!==null ? fmtMoney(r.value) : '—')+'</td>' +
+        '<td class="'+bkSignCls(r.unreal)+'">'+(r.unreal!==null ? plMoney(r.unreal) : '—')+'</td>' +
+        '<td class="'+bkSignCls(r.realised)+'">'+(r.realisedCount ? plMoney(r.realised) : '—')+'</td>' +
+        '<td class="'+bkSignCls(r.total)+'" style="font-weight:800;">'+plMoney(r.total)+'</td></tr>';
+    }).join('');
+    var tot = '<tr><td><span class="sym">Total</span></td><td></td><td></td><td></td><td class="'+bkSignCls(c.U.dayKnown?c.U.dayPnl:null)+'">'+(c.U.dayKnown?plMoney(c.U.dayPnl):'—')+'</td><td>'+(c.U.open?fmtMoney(c.U.cost):'—')+'</td><td>'+(c.U.withPrice?fmtMoney(c.U.value):'—')+'</td><td class="'+bkSignCls(c.U.unreal)+'" style="font-weight:800;">'+(c.U.withPrice?plMoney(c.U.unreal):'—')+'</td><td class="'+bkSignCls(c.R.realised)+'" style="font-weight:800;">'+plMoney(c.R.realised)+'</td><td class="'+bkSignCls(c.total)+'" style="font-weight:800;">'+plMoney(c.total)+'</td></tr>';
+    // flash cells whose price moved since the last tick
+    var prev = {}; tbl.querySelectorAll('td[data-ltp]').forEach(function(td){ prev[td.getAttribute('data-ltp')] = td.textContent; });
+    tbl.innerHTML = th+body+tot;
+    tbl.querySelectorAll('td[data-ltp]').forEach(function(td){
+      var k = td.getAttribute('data-ltp'), q = k ? liveQuotes[k] : null;
+      if(q && q.prevLtp!==null && q.prevLtp!==undefined && q.prevLtp!==q.ltp && prev[k]!==undefined) td.classList.add(q.ltp>q.prevLtp ? 'pl-flash-up' : 'pl-flash-down');
+    });
+  }
+
+  function plRenderUnmapped(c){
+    var el = bkEl('plUnmapped'), banner = bkEl('plBanner'); if(!el) return;
+    var needs = [];
+    bkOpenRows().forEach(function(o){
+      if(!o.key) needs.push({ticker:o.ticker, why:'No exchange symbol known for this name.', cur:''});
+      else if(bkReady() && liveState.status==='ok' && !o.live && liveMissing.indexOf(o.key)>-1) needs.push({ticker:o.ticker, why:'The broker has no quote for '+o.key+'.', cur:o.key.split(':')[1]});
+    });
+    var seen = {}; needs = needs.filter(function(n){ if(seen[n.ticker]) return false; seen[n.ticker] = 1; return true; });
+    el.innerHTML = needs.length ? '<div class="pl-unmapped"><div style="font-weight:700; font-size:12.5px;">Fix symbols for live prices</div><div class="bk-note">Type the exchange trading symbol (SME names often end in -SM). Optional prefix: <b>BSE:</b>.</div>' +
+      needs.map(function(n){ return '<div class="pl-unmapped-row" data-map-ticker="'+escapeHtml(n.ticker)+'"><span style="font-size:12px; font-weight:700; min-width:90px;">'+escapeHtml(n.ticker)+'</span><input type="text" value="'+escapeHtml(n.cur)+'" placeholder="e.g. RELIANCE" aria-label="Symbol for '+escapeHtml(n.ticker)+'"><button class="btn primary" style="padding:7px 14px; font-size:12px;">Save</button><span class="bk-note" style="flex-basis:100%;">'+escapeHtml(n.why)+'</span></div>'; }).join('') + '</div>' : '';
+    if(banner){
+      if(!bkReady()) banner.innerHTML = '<div class="bk-banner"><b>Add live prices.</b> Unrealised P&amp;L is using the last price from your imports. Connect Zerodha or Groww (Settings → Broker connection) to value open positions at the live price.<br><button class="btn primary" style="padding:7px 14px; font-size:12px;" data-goto-settings>Open broker settings</button></div>';
+      else if(bkLoginNeeded) banner.innerHTML = '<div class="bk-banner"><b>Zerodha session expired.</b> Zerodha logins reset every morning. <br><button class="btn primary" style="padding:7px 14px; font-size:12px;" data-kite-login>Connect Zerodha</button></div>';
+      else banner.innerHTML = '';
+    }
+  }
+
+  function renderPnlPanel(fromLive){
+    if(!bkEl('plComponents')) return;
+    var c = plCompute(plPeriod);
+    plRenderComponents(c); plRenderWaterfall(c); plRenderCumulative(c); plRenderStockBars(c); plRenderTable(c);
+    if(!fromLive || !document.activeElement || !document.activeElement.closest('#plUnmapped')) plRenderUnmapped(c);
+    bkPaintBadges();
+  }
+
+  // =====================================================================
+  // TRADE CHART — candles from your broker with every buy & sell marked
+  // (hand-drawn SVG, same approach as the rest of the app; no extra library)
+  // =====================================================================
+  var tcState = {ticker:'', interval:'day', range:'trades', candles:[], source:'', error:'', synthetic:false, key:'', vs:0, vn:120, loadToken:0, loading:false};
+  var tcChromeDirty = true, tcCache = {}, tcLayout = null, tcRaf = 0, tcPointers = {}, tcDrag = null, tcPinch = null, tcInited = false;
+  var TC_SPAN = {day:86400, week:7*86400, '60minute':3600, '15minute':900};
+
+  function tcAddDays(ds, n){ var d = new Date(ds+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
+  function tcDaysBetween(a, b){ return Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/86400000); }
+
+  function tcTickers(){
+    var m = {};
+    (db.trades||[]).forEach(function(t){
+      var tk = t.ticker; if(!tk) return;
+      var r = m[tk] || (m[tk] = {ticker:tk, open:0, last:''});
+      if(!t.exitDT){ var sz = parseFloat(t.posSize); r.open += isNaN(sz) ? 1 : sz; }
+      var d = tradeBasisDate(t) || ''; if(d>r.last) r.last = d;
+    });
+    return Object.keys(m).map(function(k){ return m[k]; }).sort(function(a,b){ return (b.open>0)-(a.open>0) || (!!liveQuotes[bkSymbolKey(b.ticker)])-(!!liveQuotes[bkSymbolKey(a.ticker)]) || (!!bkSymbolKey(b.ticker))-(!!bkSymbolKey(a.ticker)) || b.last.localeCompare(a.last) || a.ticker.localeCompare(b.ticker); });
+  }
+
+  // Every buy/sell fill for a stock, as {epoch, date, price, qty, side, trade, kind}.
+  function tcFills(ticker){
+    var out = [];
+    (db.trades||[]).forEach(function(t){
+      if(t.ticker!==ticker) return;
+      var qty = parseFloat(t.qty), ep = parseFloat(t.entryPrice), xp = parseFloat(t.exitPrice), short = t.direction==='short';
+      if(!(qty>0)) return;
+      var entryStr = t.entryDT || (t.date ? t.date+'T09:15' : '');
+      if(entryStr && !isNaN(ep)){ var e = bkIstToEpoch(entryStr); if(!isNaN(e)) out.push({epoch:e, date:entryStr.slice(0,10), price:ep, qty:qty, side: short?'sell':'buy', trade:t, kind:'entry'}); }
+      if(t.exitDT && !isNaN(xp)){ var x = bkIstToEpoch(t.exitDT); if(!isNaN(x)) out.push({epoch:x, date:t.exitDT.slice(0,10), price:xp, qty:qty, side: short?'buy':'sell', trade:t, kind:'exit'}); }
+    });
+    return out.sort(function(a,b){ return a.epoch-b.epoch; });
+  }
+
+  function tcRangeDates(fills){
+    var s = tcState, today = todayKey(), iv = s.interval, from;
+    var days = {'3m':92, '6m':183, '1y':366, '3y':1100}[s.range];
+    if(s.range==='trades'){
+      from = fills.length ? tcAddDays(fills[0].date, (iv==='day'||iv==='week') ? -45 : -4) : tcAddDays(today, -180);
+      if(iv==='day' && tcDaysBetween(from, today)<120) from = tcAddDays(today, -120);
+      if(iv==='week' && tcDaysBetween(from, today)<730) from = tcAddDays(today, -730);
+    } else from = tcAddDays(today, -days);
+    var maxBack = iv==='15minute' ? 85 : (iv==='60minute' ? 360 : 5000);
+    var floor = tcAddDays(today, -maxBack); if(from<floor) from = floor;
+    return {from:from, to:today};
+  }
+
+  // No price history (no proxy / symbol / quota)? Still show your own fills as a line.
+  function tcSynthetic(fills){
+    var days = {};
+    fills.forEach(function(f){ var d = days[f.date] || (days[f.date] = {t:f.epoch, o:f.price, h:f.price, l:f.price, c:f.price, v:0}); d.h = Math.max(d.h, f.price); d.l = Math.min(d.l, f.price); d.c = f.price; });
+    var arr = Object.keys(days).sort().map(function(k){ return days[k]; });
+    var rows = bkOpenRows().filter(function(o){ return o.ticker===tcState.ticker && o.ltp!==null; });
+    if(rows.length){ var tNow = Math.floor(Date.now()/1000), px = rows[0].ltp; if(!arr.length || arr[arr.length-1].t<tNow-3600) arr.push({t:tNow, o:px, h:px, l:px, c:px, v:0}); }
+    return arr;
+  }
+
+  function tcFit(){
+    var s = tcState, N = s.candles.length;
+    if(!N){ s.vs = 0; s.vn = 60; return; }
+    var cap = s.synthetic ? N+4 : ((s.interval==='day'||s.interval==='week') ? 420 : 160);
+    s.vn = Math.min(N+6, cap); s.vs = Math.max(0, N+6-s.vn);
+  }
+
+  async function tcLoad(force){
+    var s = tcState; if(!s.ticker){ tcPaint(); return; }
+    var tok = ++s.loadToken; s.error = ''; s.synthetic = false; tcChromeDirty = true;
+    var key = bkSymbolKey(s.ticker); s.key = key;
+    var fills = tcFills(s.ticker);
+    if(!bkReady() || !key){
+      s.candles = tcSynthetic(fills); s.synthetic = true; s.source = ''; s.error = !bkReady() ? 'noproxy' : 'nosymbol'; s.loading = false; tcFit(); tcPaint(); return;
+    }
+    var rg = tcRangeDates(fills), ck = [key, s.interval, rg.from, rg.to].join('|');
+    var hit = tcCache[ck], ttl = (s.interval==='day'||s.interval==='week') ? 1800000 : 120000;
+    if(hit && !force && Date.now()-hit.at<ttl){ s.candles = hit.candles; s.source = hit.source; s.loading = false; tcFit(); tcPaint(); return; }
+    s.loading = true; tcPaint();
+    try{
+      var r = await bkGet('/candles', {symbol:key, interval:s.interval, from:rg.from, to:rg.to, broker:bkCfg().pref}, 45000);
+      if(tok!==s.loadToken) return;
+      if(!(r.candles||[]).length) throw new Error('The broker returned no candles for '+key+'.');
+      tcCache[ck] = {candles:r.candles, source:r.source, at:Date.now()};
+      s.candles = r.candles; s.source = r.source;
+      if(r.source==='kite' && r.symbol && r.symbol.indexOf(':')>-1 && r.symbol!==key && !bkSymbolMap()[s.ticker]){ bkSymbolMap()[s.ticker] = r.symbol; try{ saveDB(); }catch(e){} }
+    }catch(e){
+      if(tok!==s.loadToken) return;
+      s.candles = tcSynthetic(fills); s.synthetic = true; s.error = e.message || 'Could not load price history.'; if(e.code==='kite_login') bkLoginNeeded = true;
+    }
+    s.loading = false; tcChromeDirty = true; tcFit(); tcPaint();
+  }
+
+  // Applies the live quote to the last candle so the chart ticks with the market.
+  function tcDisplayCandles(){
+    var s = tcState, c = s.candles; if(s.synthetic || !c.length) return c;
+    var q = s.key ? liveQuotes[s.key] : null; if(!q) return c;
+    var last = c[c.length-1], isDaily = s.interval==='day';
+    var lastIsToday = isDaily ? bkIstDate(last.t)===bkIstDate(Math.floor(Date.now()/1000)) : (Math.floor(Date.now()/1000)-last.t < (TC_SPAN[s.interval]||86400));
+    if(!lastIsToday) return c;
+    var copy = c.slice(); copy[copy.length-1] = {t:last.t, o:last.o, h:Math.max(last.h, q.ltp), l:Math.min(last.l, q.ltp), c:q.ltp, v:last.v};
+    return copy;
+  }
+
+  // fill → candle index (or -1 if outside the loaded window)
+  function tcIndexFor(candles, f){
+    var iv = tcState.interval, n = candles.length; if(!n) return -1;
+    if(iv==='day' || iv==='week'){
+      var lo = 0, hi = n-1, ans = -1;
+      while(lo<=hi){ var mid = (lo+hi)>>1; if(bkIstDate(candles[mid].t)<=f.date){ ans = mid; lo = mid+1; } else hi = mid-1; }
+      if(ans<0) return -1;
+      var span = iv==='day' ? 4 : 6;   // tolerate weekend/holiday fills (imports often default to a nominal date) if(tcDaysBetween(bkIstDate(candles[ans].t), f.date)>span) return -1;
+      return ans;
+    }
+    var l = 0, h = n-1, a = -1;
+    while(l<=h){ var m = (l+h)>>1; if(candles[m].t<=f.epoch){ a = m; l = m+1; } else h = m-1; }
+    if(a<0 || f.epoch > candles[a].t + (TC_SPAN[iv]||3600)) return -1;
+    return a;
+  }
+
+  function tcNiceTicks(min, max, count){
+    var span = max-min || 1, raw = span/count, mag = Math.pow(10, Math.floor(Math.log10(raw))), norm = raw/mag;
+    var step = (norm<1.5?1:norm<3?2:norm<7?5:10)*mag, out = [], v = Math.ceil(min/step)*step;
+    for(; v<=max+1e-9; v+=step) out.push(+v.toFixed(8));
+    return out;
+  }
+  function tcFmtAxisDate(t){
+    var d = new Date((t+19800)*1000), iso = d.toISOString(), mon = d.toLocaleString('en-US',{month:'short', timeZone:'UTC'});
+    if(tcState.interval==='day'||tcState.interval==='week') return parseInt(iso.slice(8,10),10)+' '+mon+(tcState.vn>240 ? " '"+iso.slice(2,4) : '');
+    return parseInt(iso.slice(8,10),10)+' '+mon+' '+iso.slice(11,16);
+  }
+
+  function tcPaint(){ if(tcRaf) return; tcRaf = requestAnimationFrame(function(){ tcRaf = 0; tcDraw(); }); }
+
+  function tcDraw(){
+    var stage = bkEl('tcStage'), svg = bkEl('tcSvg'), msg = bkEl('tcMsg'); if(!stage || !svg) return;
+    var s = tcState;
+    if(tcChromeDirty){ tcChromeDirty = false; tcRenderBanner(); tcRenderSummary(); tcRenderTrades(); }
+    var candles = tcDisplayCandles(), N = candles.length;
+    var W = Math.max(300, stage.clientWidth || 600), H = W<520 ? 320 : 420;
+    svg.setAttribute('viewBox', '0 0 '+W+' '+H); svg.setAttribute('height', H);
+    if(s.loading){ msg.style.display = 'flex'; msg.textContent = 'Loading price history…'; svg.innerHTML = ''; return; }
+    if(!s.ticker){ msg.style.display = 'flex'; msg.textContent = 'No trades yet — log or import some to see them on a chart.'; svg.innerHTML = ''; return; }
+    if(!N){ msg.style.display = 'flex'; msg.textContent = 'No data to draw for this stock.'; svg.innerHTML = ''; return; }
+    msg.style.display = 'none';
+
+    var padL = 6, padR = 62, padT = 12, axisH = 22, volH = s.synthetic ? 0 : 54, gapV = s.synthetic ? 0 : 6;
+    var plotW = W-padL-padR, priceH = H-padT-axisH-volH-gapV;
+    s.vn = Math.max(12, Math.min(s.vn, N+12)); s.vs = Math.max(-4, Math.min(s.vs, N-s.vn+10));
+    var cw = plotW/s.vn, x = function(i){ return padL + (i-s.vs+0.5)*cw; };
+    var i0 = Math.max(0, Math.floor(s.vs)), i1 = Math.min(N-1, Math.ceil(s.vs+s.vn));
+
+    // fills → markers aggregated per candle & side
+    var fills = tcFills(s.ticker), markers = {}, pointFills = [];
+    fills.forEach(function(f){
+      var idx = tcIndexFor(candles, f); if(idx<0) return;
+      var k = idx+'|'+f.side, m = markers[k] || (markers[k] = {idx:idx, side:f.side, qty:0, val:0, fills:[]});
+      m.qty += f.qty; m.val += f.qty*f.price; m.fills.push(f); pointFills.push({idx:idx, f:f});
+    });
+    var mList = Object.keys(markers).map(function(k){ var m = markers[k]; m.price = m.val/m.qty; return m; });
+
+    // price scale
+    var lo = Infinity, hi = -Infinity;
+    for(var i=i0;i<=i1;i++){ lo = Math.min(lo, candles[i].l); hi = Math.max(hi, candles[i].h); }
+    mList.forEach(function(m){ if(m.idx>=i0 && m.idx<=i1){ lo = Math.min(lo, m.price); hi = Math.max(hi, m.price); } });
+    var open = bkOpenRows().filter(function(o){ return o.ticker===s.ticker; }), avgLine = null, ltpLine = null;
+    if(open.length){ var o = open[0]; avgLine = o.avg; if(o.ltp!==null) ltpLine = o.ltp; }
+    var near = function(v){ return v!==null && v>=lo*0.75 && v<=hi*1.25; };
+    if(near(avgLine)){ lo = Math.min(lo, avgLine); hi = Math.max(hi, avgLine); }
+    if(near(ltpLine)){ lo = Math.min(lo, ltpLine); hi = Math.max(hi, ltpLine); }
+    if(!isFinite(lo) || !isFinite(hi)){ lo = 0; hi = 1; }
+    var pad = (hi-lo)*0.08 || hi*0.02 || 1; lo -= pad; hi += pad;
+    var y = function(v){ return padT + (1-(v-lo)/(hi-lo))*priceH; };
+
+    var out = '';
+    // grid + price axis
+    tcNiceTicks(lo, hi, Math.max(3, Math.round(priceH/62))).forEach(function(v){
+      out += '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+y(v).toFixed(1)+'" y2="'+y(v).toFixed(1)+'" stroke="var(--line)" stroke-width="1" opacity=".7"/>' +
+        '<text x="'+(W-padR+6)+'" y="'+(y(v)+3.5).toFixed(1)+'" font-size="10" font-family="IBM Plex Mono" fill="var(--ink-faint)">'+bkPx(v)+'</text>';
+    });
+    // x-axis labels
+    var ticks = Math.max(2, Math.floor(plotW/110));
+    for(var j=0;j<=ticks;j++){
+      var ii = Math.round(s.vs + (s.vn-1)*j/ticks); if(ii<0 || ii>=N) continue;
+      out += '<text x="'+x(ii).toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="10" font-family="Inter" fill="var(--ink-faint)">'+tcFmtAxisDate(candles[ii].t)+'</text>';
+    }
+    out += '<clipPath id="tcClip"><rect x="'+padL+'" y="0" width="'+plotW+'" height="'+H+'"/></clipPath><g clip-path="url(#tcClip)">';
+
+    if(s.synthetic){
+      var d = ''; for(var a=i0;a<=i1;a++) d += (a===i0?'M':'L')+x(a).toFixed(1)+' '+y(candles[a].c).toFixed(1)+' ';
+      out += '<path d="'+d+'" fill="none" stroke="var(--ink-faint)" stroke-width="1.6" stroke-dasharray="4,3"/>';
+      for(var b=i0;b<=i1;b++) out += '<circle cx="'+x(b).toFixed(1)+'" cy="'+y(candles[b].c).toFixed(1)+'" r="2.6" fill="var(--ink-faint)"/>';
+    } else {
+      var bw = Math.max(1, Math.min(14, cw*0.68)), vmax = 0;
+      for(var v=i0; v<=i1; v++) vmax = Math.max(vmax, candles[v].v||0);
+      for(var k2=i0;k2<=i1;k2++){
+        var c = candles[k2], up = c.c>=c.o, col = up ? 'var(--teal)' : 'var(--rose)', cx = x(k2);
+        out += '<line x1="'+cx.toFixed(1)+'" x2="'+cx.toFixed(1)+'" y1="'+y(c.h).toFixed(1)+'" y2="'+y(c.l).toFixed(1)+'" stroke="'+col+'" stroke-width="1"/>';
+        var yt = y(Math.max(c.o,c.c)), yb = y(Math.min(c.o,c.c));
+        out += '<rect x="'+(cx-bw/2).toFixed(1)+'" y="'+yt.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.max(1, yb-yt).toFixed(1)+'" fill="'+col+'" '+(up?'fill-opacity=".92"':'')+'/>';
+        if(vmax && c.v){ var vh = (c.v/vmax)*volH; out += '<rect x="'+(cx-bw/2).toFixed(1)+'" y="'+(H-axisH-vh).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+vh.toFixed(1)+'" fill="'+col+'" opacity=".32"/>'; }
+      }
+    }
+
+    // round-trip connectors (entry → exit), coloured by outcome
+    (db.trades||[]).forEach(function(t){
+      if(t.ticker!==s.ticker || !t.exitDT) return;
+      var pe = pointFills.filter(function(p){ return p.f.trade===t && p.f.kind==='entry'; })[0], px = pointFills.filter(function(p){ return p.f.trade===t && p.f.kind==='exit'; })[0];
+      if(!pe || !px) return;
+      var pnl = parseFloat(t.pnl);
+      out += '<line x1="'+x(pe.idx).toFixed(1)+'" y1="'+y(pe.f.price).toFixed(1)+'" x2="'+x(px.idx).toFixed(1)+'" y2="'+y(px.f.price).toFixed(1)+'" stroke="'+((isNaN(pnl)||pnl>=0)?'var(--teal)':'var(--rose)')+'" stroke-width="1.6" stroke-dasharray="4,3" opacity=".75"/>';
+    });
+
+    // avg cost / live price / stop-loss
+    var label = function(v, text, col, fg){ return '<rect x="'+(W-padR+1)+'" y="'+(y(v)-8).toFixed(1)+'" width="'+(padR-2)+'" height="16" rx="3" fill="'+col+'"/><text x="'+(W-padR+5)+'" y="'+(y(v)+3.6).toFixed(1)+'" font-size="10" font-weight="700" font-family="IBM Plex Mono" fill="'+fg+'">'+text+'</text>'; };
+    var lines = '';
+    if(avgLine!==null && avgLine>=lo && avgLine<=hi) lines += '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+y(avgLine).toFixed(1)+'" y2="'+y(avgLine).toFixed(1)+'" stroke="var(--accent)" stroke-width="1.5"/>';
+    if(ltpLine!==null && ltpLine>=lo && ltpLine<=hi) lines += '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+y(ltpLine).toFixed(1)+'" y2="'+y(ltpLine).toFixed(1)+'" stroke="var(--ink)" stroke-width="1" stroke-dasharray="2,3" opacity=".7"/>';
+    open.forEach(function(o){ o.trades.forEach(function(t){ var sl = parseFloat(t.slPrice); if(!isNaN(sl) && sl>=lo && sl<=hi) lines += '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+y(sl).toFixed(1)+'" y2="'+y(sl).toFixed(1)+'" stroke="var(--rose)" stroke-width="1" stroke-dasharray="6,4" opacity=".7"/>'; }); });
+    out += lines;
+
+    // buy / sell markers
+    var showLbl = cw>=15;
+    mList.forEach(function(m){
+      if(m.idx<i0-1 || m.idx>i1+1) return;
+      var c = candles[m.idx], cx = x(m.idx), buy = m.side==='buy', col = buy ? 'var(--teal)' : 'var(--rose)', sz = Math.max(6, Math.min(10, cw*0.7+3));
+      var py = buy ? y(c.l)+sz+5 : y(c.h)-sz-5;
+      if(!s.synthetic){ py = buy ? Math.max(y(m.price)+sz+3, y(c.l)+sz+4) : Math.min(y(m.price)-sz-3, y(c.h)-sz-4); }
+      else py = buy ? y(m.price)+sz+4 : y(m.price)-sz-4;
+      var tri = buy ? (cx-sz)+','+(py+sz*0.9)+' '+(cx+sz)+','+(py+sz*0.9)+' '+cx+','+(py-sz*0.9) : (cx-sz)+','+(py-sz*0.9)+' '+(cx+sz)+','+(py-sz*0.9)+' '+cx+','+(py+sz*0.9);
+      out += '<polygon points="'+tri+'" fill="'+col+'" stroke="var(--surface)" stroke-width="1.5"/>';
+      if(showLbl){ var ly = buy ? py+sz+10 : py-sz-3; out += '<text x="'+cx.toFixed(1)+'" y="'+ly.toFixed(1)+'" text-anchor="middle" font-size="9.5" font-weight="800" font-family="IBM Plex Mono" fill="'+col+'" stroke="var(--surface)" stroke-width="2.5" paint-order="stroke">'+(buy?'B ':'S ')+(m.qty%1?m.qty.toFixed(2):m.qty)+'</text>'; }
+    });
+    out += '</g>';
+    if(avgLine!==null && avgLine>=lo && avgLine<=hi) out += label(avgLine, bkPx(avgLine), 'var(--accent)', 'var(--accent-ink)');
+    if(ltpLine!==null && ltpLine>=lo && ltpLine<=hi) out += label(ltpLine, bkPx(ltpLine), 'var(--ink)', 'var(--surface)');
+    out += '<g id="tcCross" style="display:none;"><line id="tcCv" y1="'+padT+'" y2="'+(H-axisH)+'" stroke="var(--ink-faint)" stroke-dasharray="3,3"/><line id="tcCh" x1="'+padL+'" x2="'+(W-padR)+'" stroke="var(--ink-faint)" stroke-dasharray="3,3"/></g>';
+    svg.innerHTML = out;
+    tcLayout = {W:W, H:H, padL:padL, padR:padR, padT:padT, plotW:plotW, priceH:priceH, cw:cw, lo:lo, hi:hi, candles:candles, markers:markers, N:N};
+  }
+
+  function tcRenderBanner(){
+    var el = bkEl('tcBanner'), s = tcState; if(!el) return;
+    var h = '';
+    if(s.error==='noproxy') h = '<div class="bk-banner"><b>Showing only your own fills.</b> Connect a broker (Settings → Broker connection) to see the real price candles behind them.<br><button class="btn primary" style="padding:7px 14px; font-size:12px;" data-goto-settings>Open broker settings</button></div>';
+    else if(s.error==='nosymbol') h = '<div class="bk-banner"><b>No exchange symbol for “'+escapeHtml(s.ticker)+'”.</b> Tap <b>Symbol</b> above and enter its NSE/BSE trading symbol to load price history.</div>';
+    else if(s.error) h = '<div class="bk-banner"><b>Price history unavailable</b> — '+escapeHtml(s.error)+' Showing your own fills instead.'+(bkLoginNeeded?'<br><button class="btn primary" style="padding:7px 14px; font-size:12px;" data-kite-login>Connect Zerodha</button>':'')+'</div>';
+    el.innerHTML = h;
+    var sb = bkEl('tcSymbolBtn'); if(sb) sb.textContent = s.key ? s.key : 'Set symbol';
+  }
+
+  function tcRenderSummary(){
+    var el = bkEl('tcSummary'), s = tcState; if(!el) return;
+    if(!s.ticker){ el.innerHTML = ''; return; }
+    var rows = bkOpenRows().filter(function(o){ return o.ticker===s.ticker; }), o = rows[0];
+    var realised = 0, nClosed = 0;
+    (db.trades||[]).forEach(function(t){ if(t.ticker===s.ticker && t.exitDT){ var p = parseFloat(t.pnl); if(!isNaN(p)){ realised += p; nClosed++; } } });
+    var unreal = o ? o.unreal : null, total = realised + (unreal||0);
+    var tile = function(l, v, cls, sub){ return '<div class="tc-sum"><div class="l">'+l+'</div><div class="v '+(cls||'')+'">'+v+'</div>'+(sub?'<div class="bk-note" style="font-size:10.5px;">'+sub+'</div>':'')+'</div>'; };
+    el.innerHTML =
+      tile('Open position', o ? (o.dir==='short'?'−':'')+o.qty+' @ '+bkPx(o.avg) : 'Flat', '', o ? 'cost '+fmtMoney(o.cost) : 'no open qty') +
+      tile('Last price', o && o.ltp!==null ? bkPx(o.ltp) : (liveQuotes[s.key] ? bkPx(liveQuotes[s.key].ltp) : '—'), '', o && o.dayPct!==null ? '<span class="'+bkSignCls(o.dayPct)+'">'+bkPct(o.dayPct)+' today</span>' : (o && !o.live ? 'last known' : '')) +
+      tile('Unrealised', unreal!==null ? plMoney(unreal) : '—', bkSignCls(unreal), o && o.unrealPct!==null ? bkPct(o.unrealPct) : '') +
+      tile('Realised', nClosed ? plMoney(realised) : '—', bkSignCls(nClosed?realised:null), nClosed+' closed') +
+      tile('Total', (nClosed||unreal!==null) ? plMoney(total) : '—', bkSignCls((nClosed||unreal!==null)?total:null), 'this stock');
+  }
+
+  function tcRenderTrades(){
+    var tbl = bkEl('tcTrades'), s = tcState; if(!tbl) return;
+    var ts = (db.trades||[]).filter(function(t){ return t.ticker===s.ticker; }).sort(function(a,b){ return (b.entryDT||b.date||'').localeCompare(a.entryDT||a.date||''); });
+    if(!ts.length){ tbl.innerHTML = '<tr><td style="text-align:left; color:var(--ink-faint); padding:20px 0;">No trades for this stock.</td></tr>'; return; }
+    tbl.innerHTML = '<tr><th>Opened</th><th>Side</th><th>Qty</th><th>Entry</th><th>Closed</th><th>Exit / LTP</th><th>P&amp;L</th><th>Return</th></tr>' + ts.map(function(t){
+      var closed = !!t.exitDT, pnl = closed ? parseFloat(t.pnl) : parseFloat(t.unrealizedPnl), ep = parseFloat(t.entryPrice), qty = parseFloat(t.qty), ret = (!isNaN(pnl) && ep && qty) ? pnl/(ep*qty)*100 : null;
+      return '<tr class="clickable" data-focus-date="'+escapeHtml((t.entryDT||t.date||'').slice(0,10))+'"><td>'+escapeHtml((t.entryDT||t.date||'—').slice(0,10))+'</td><td>'+(t.direction==='short'?'Short':'Long')+'</td><td>'+(t.qty||'—')+'</td><td>'+bkPx(ep)+'</td><td>'+(closed ? escapeHtml(t.exitDT.slice(0,10)) : '<span class="pl-tag">open</span>')+'</td><td>'+(closed ? bkPx(parseFloat(t.exitPrice)) : bkPx(parseFloat(t.markPrice)))+'</td><td class="'+bkSignCls(pnl)+'">'+(isNaN(pnl)?'—':plMoney(pnl))+'</td><td class="'+bkSignCls(ret)+'">'+bkPct(ret)+'</td></tr>';
+    }).join('');
+  }
+
+  function tcOnLiveTick(){ tcChromeDirty = true; tcPaint(); }
+
+  function tcFocusDate(ds){
+    var s = tcState, c = s.candles; if(!c.length || !ds) return;
+    var idx = -1; for(var i=0;i<c.length;i++){ if(bkIstDate(c[i].t)<=ds) idx = i; else break; }
+    if(idx<0) return;
+    s.vs = idx - s.vn/2; tcPaint();
+    var st = bkEl('tcStage'); if(st && st.scrollIntoView) st.scrollIntoView({behavior:'smooth', block:'center'});
+  }
+
+  function tcZoom(factor, anchorFrac){
+    var s = tcState, N = s.candles.length; if(!N) return;
+    var a = (anchorFrac===undefined ? 0.5 : anchorFrac), anchorI = s.vs + a*s.vn;
+    s.vn = Math.max(12, Math.min(N+12, s.vn*factor)); s.vs = anchorI - a*s.vn; tcPaint();
+  }
+
+  function tcHover(clientX, clientY){
+    var L = tcLayout, stage = bkEl('tcStage'), tip = bkEl('tcTip'), cross = bkEl('tcCross'); if(!L || !stage || !tip || !cross) return;
+    var r = stage.getBoundingClientRect(), px = (clientX-r.left)/r.width*L.W, py = (clientY-r.top)/r.height*L.H;
+    var idx = Math.floor((px-L.padL)/L.cw + tcState.vs);
+    if(idx<0 || idx>=L.N || px>L.W-L.padR){ cross.style.display = 'none'; tip.style.display = 'none'; return; }
+    var c = L.candles[idx], cx = L.padL + (idx-tcState.vs+0.5)*L.cw;
+    cross.style.display = ''; var cv = bkEl('tcCv'), ch = bkEl('tcCh');
+    cv.setAttribute('x1', cx); cv.setAttribute('x2', cx); ch.setAttribute('y1', py); ch.setAttribute('y2', py);
+    var chg = idx>0 ? (c.c-L.candles[idx-1].c)/L.candles[idx-1].c*100 : null;
+    var h = '<div class="h">'+tcFmtAxisDate(c.t)+(tcState.interval==='day'||tcState.interval==='week' ? ' · '+new Date((c.t+19800)*1000).getUTCFullYear() : '')+'</div>';
+    if(tcState.synthetic) h += '<div>Fill price '+bkPx(c.c)+'</div>';
+    else h += '<div>O '+bkPx(c.o)+'  H '+bkPx(c.h)+'</div><div>L '+bkPx(c.l)+'  C '+bkPx(c.c)+(chg!==null?' ('+bkPct(chg)+')':'')+'</div>'+(c.v?'<div>Vol '+Number(c.v).toLocaleString('en-IN')+'</div>':'');
+    ['buy','sell'].forEach(function(side){ var m = L.markers[idx+'|'+side]; if(!m) return; h += '<div class="'+(side==='buy'?'b':'s')+'">'+(side==='buy'?'Bought ':'Sold ')+m.qty+' @ '+bkPx(m.price)+(m.fills.length>1?' (avg of '+m.fills.length+')':'')+'</div>'; });
+    tip.innerHTML = h; tip.style.display = 'block';
+    var tw = tip.offsetWidth, left = (cx/L.W*r.width) + 14; if(left+tw > r.width-4) left = (cx/L.W*r.width) - tw - 14;
+    tip.style.left = Math.max(4,left)+'px'; tip.style.top = Math.max(4, Math.min(r.height-tip.offsetHeight-4, (py/L.H*r.height)-20))+'px';
+  }
+
+  function tcInit(){
+    if(tcInited) return; var stage = bkEl('tcStage'); if(!stage) return; tcInited = true;
+    stage.style.touchAction = 'pan-y';
+    stage.addEventListener('pointerdown', function(e){
+      if(e.target.closest('.tc-zoom')) return;
+      tcPointers[e.pointerId] = {x:e.clientX, y:e.clientY};
+      try{ stage.setPointerCapture(e.pointerId); }catch(err){}
+      var ids = Object.keys(tcPointers);
+      if(ids.length===1) tcDrag = {x:e.clientX, vs:tcState.vs, moved:false};
+      if(ids.length===2){ var a = tcPointers[ids[0]], b = tcPointers[ids[1]]; tcPinch = {d:Math.hypot(a.x-b.x, a.y-b.y), vn:tcState.vn, vs:tcState.vs}; tcDrag = null; }
+    });
+    stage.addEventListener('pointermove', function(e){
+      var p = tcPointers[e.pointerId];
+      if(p){ p.x = e.clientX; p.y = e.clientY; }
+      var ids = Object.keys(tcPointers);
+      if(tcPinch && ids.length===2){
+        var a = tcPointers[ids[0]], b = tcPointers[ids[1]], d = Math.hypot(a.x-b.x, a.y-b.y);
+        if(d>10 && tcPinch.d>10){ var N = tcState.candles.length, mid = ((a.x+b.x)/2 - stage.getBoundingClientRect().left)/stage.clientWidth; var anchor = tcPinch.vs + mid*tcPinch.vn; tcState.vn = Math.max(12, Math.min(N+12, tcPinch.vn*tcPinch.d/d)); tcState.vs = anchor - mid*tcState.vn; tcPaint(); }
+        return;
+      }
+      if(tcDrag && p && ids.length===1){
+        var dx = e.clientX - tcDrag.x;
+        if(Math.abs(dx)>3 || tcDrag.moved){ tcDrag.moved = true; stage.classList.add('dragging'); tcState.vs = tcDrag.vs - dx/(tcLayout ? tcLayout.cw : 8); tcPaint(); var tip = bkEl('tcTip'); if(tip) tip.style.display = 'none'; return; }
+      }
+      if(e.pointerType!=='touch') tcHover(e.clientX, e.clientY);
+    });
+    var end = function(e){ delete tcPointers[e.pointerId]; if(Object.keys(tcPointers).length<2) tcPinch = null; if(!Object.keys(tcPointers).length){ if(tcDrag && !tcDrag.moved && e.pointerType==='touch') tcHover(e.clientX, e.clientY); tcDrag = null; stage.classList.remove('dragging'); } };
+    stage.addEventListener('pointerup', end); stage.addEventListener('pointercancel', end);
+    stage.addEventListener('pointerleave', function(e){ if(e.pointerType!=='touch'){ var t = bkEl('tcTip'), c = bkEl('tcCross'); if(t) t.style.display = 'none'; if(c) c.style.display = 'none'; } });
+    stage.addEventListener('wheel', function(e){
+      if(e.ctrlKey || e.metaKey){ e.preventDefault(); var r = stage.getBoundingClientRect(); tcZoom(e.deltaY>0 ? 1.15 : 1/1.15, (e.clientX-r.left)/r.width); }
+      else if(Math.abs(e.deltaX)>Math.abs(e.deltaY)){ e.preventDefault(); tcState.vs += e.deltaX/(tcLayout?tcLayout.cw:8); tcPaint(); }
+    }, {passive:false});
+    bkEl('tcZoomIn').addEventListener('click', function(){ tcZoom(1/1.3); });
+    bkEl('tcZoomOut').addEventListener('click', function(){ tcZoom(1.3); });
+    bkEl('tcFit').addEventListener('click', function(){ tcState.vn = tcState.candles.length+6; tcState.vs = 0; tcPaint(); });
+    window.addEventListener('resize', function(){ if(bkPanelActive('chart')) tcPaint(); });
+
+    bkEl('tcTicker').addEventListener('change', function(e){ tcState.ticker = e.target.value; tcLoad(); });
+    bkEl('tcInterval').addEventListener('click', function(e){
+      var b = e.target.closest('[data-iv]'); if(!b) return;
+      tcState.interval = b.dataset.iv; this.querySelectorAll('.eq-range-btn').forEach(function(x){ x.classList.toggle('on', x===b); });
+      if(tcState.interval==='week' && (tcState.range==='3m' || tcState.range==='6m')){ tcState.range = '1y'; tcSyncChips(); }
+      tcLoad();
+    });
+    bkEl('tcRange').addEventListener('click', function(e){ var b = e.target.closest('[data-rg]'); if(!b) return; tcState.range = b.dataset.rg; tcSyncChips(); tcLoad(); });
+    bkEl('tcReloadBtn').addEventListener('click', function(){ bkRefreshQuotes(); tcLoad(true); });
+    bkEl('tcSymbolBtn').addEventListener('click', function(){
+      if(!tcState.ticker) return;
+      var cur = tcState.key || '', v = prompt('Exchange symbol for “'+tcState.ticker+'” (e.g. RELIANCE, BSE:RELIANCE, ABC-SM):', cur.replace(/^NSE:/,''));
+      if(v===null) return; v = v.trim().toUpperCase();
+      if(v){ bkSymbolMap()[tcState.ticker] = v; } else { delete bkSymbolMap()[tcState.ticker]; }
+      try{ saveDB(); }catch(err){} tcCache = {}; bkRefreshQuotes(); tcLoad(true);
+    });
+    bkEl('tcTrades').addEventListener('click', function(e){ var tr = e.target.closest('[data-focus-date]'); if(tr) tcFocusDate(tr.dataset.focusDate); });
+  }
+  function tcSyncChips(){
+    var r = bkEl('tcRange'); if(r) r.querySelectorAll('.eq-range-btn').forEach(function(x){ x.classList.toggle('on', x.dataset.rg===tcState.range); });
+    var i = bkEl('tcInterval'); if(i) i.querySelectorAll('.eq-range-btn').forEach(function(x){ x.classList.toggle('on', x.dataset.iv===tcState.interval); });
+  }
+  function tcRefreshTickerList(){
+    var sel = bkEl('tcTicker'); if(!sel) return;
+    var list = tcTickers();
+    sel.innerHTML = list.length ? list.map(function(t){ return '<option value="'+escapeHtml(t.ticker)+'">'+escapeHtml(t.ticker)+(t.open>0?'  ● open':'')+'</option>'; }).join('') : '<option value="">No trades yet</option>';
+    if(!list.some(function(t){ return t.ticker===tcState.ticker; })) tcState.ticker = list.length ? list[0].ticker : '';
+    sel.value = tcState.ticker;
+  }
+  function tcOpen(ticker){
+    var tab = document.querySelector('[data-view="trades"]'); if(tab) tab.click();
+    activateTradePanel('chart');
+    if(ticker) tcState.ticker = ticker;
+    tcRefreshTickerList(); tcLoad();
+  }
+
+  // =====================================================================
+  // ZERODHA AUTO-SYNC (today's executed trades → journal, FIFO against open lots)
+  // =====================================================================
+  var zSyncBusy = false, zAutoTimer = null;
+  function zState(){ return db.brokerSync || (db.brokerSync = {seen:[], lastAt:0, lastCloseDay:'', lastSummary:''}); }
+  function zNormTime(s){ return String(s||'').trim().replace(' ','T').slice(0,16); }
+  function zRound4(n){ return Math.round(n*10000)/10000; }
+  function zNewId(){ return 'trade_'+Date.now()+'_'+Math.random().toString(36).slice(2,7); }
+
+  // Merge the partial fills of one order into a single leg.
+  function zMergeOrders(legs){
+    var m = {}, order = [];
+    legs.forEach(function(l){
+      var k = l.symbol.toUpperCase()+'|'+(l.orderId||l.tradeId)+'|'+l.side;
+      if(!m[k]){ m[k] = {symbol:l.symbol.toUpperCase(), side:l.side, qty:0, val:0, time:zNormTime(l.time), orderId:l.orderId, tradeId:l.tradeId, product:l.product}; order.push(k); }
+      m[k].qty += l.qty; m[k].val += l.qty*l.price; var t = zNormTime(l.time); if(t && t<m[k].time) m[k].time = t;
+    });
+    return order.map(function(k){ var x = m[k]; x.price = Math.round(x.val/x.qty*10000)/10000; return x; });
+  }
+
+  // Already in the journal (e.g. you imported today's tradebook earlier)?
+  function zLegAlreadyBooked(leg){
+    var tm = leg.time, sym = leg.symbol;
+    return (db.trades||[]).some(function(t){
+      if((t.ticker||'').toUpperCase()!==sym) return false;
+      if((t.entryDT||'').slice(0,16)===tm && Math.abs(parseFloat(t.entryPrice)-leg.price)<0.006) return true;
+      if((t.exitDT||'').slice(0,16)===tm && Math.abs(parseFloat(t.exitPrice)-leg.price)<0.006) return true;
+      return false;
+    });
+  }
+
+  function zCloseInto(t, sl){
+    var dir = t.direction==='short' ? 'short' : 'long', a = computeAutoTradeValues(t.entryPrice, sl.price, sl.qty, t.slPrice, dir);
+    t.qty = sl.qty; t.posSize = a.posSize; t.exitDT = sl.time; t.exitPrice = sl.price; t.pnl = a.pnl; t.rMultiple = a.rMultiple;
+    delete t.markPrice; delete t.markDate; delete t.unrealizedPnl; delete t.liveMark;
+  }
+  function zClosedCopy(t, sl, partial){
+    var dir = t.direction==='short' ? 'short' : 'long', a = computeAutoTradeValues(t.entryPrice, sl.price, sl.qty, t.slPrice, dir);
+    var c = Object.assign({}, t, {id:zNewId(), qty:sl.qty, posSize:a.posSize, exitDT:sl.time, exitPrice:sl.price, pnl:a.pnl, rMultiple:a.rMultiple, screenshot:null, partialExit:true, parentTradeId:t.id});
+    delete c.markPrice; delete c.markDate; delete c.unrealizedPnl; delete c.liveMark; delete c.partiallyExited;
+    return c;
+  }
+  function zOpenObj(lot, sym){
+    return {id:zNewId(), ticker:sym, date:lot.time.slice(0,10), timeframe: lot.product==='MIS' ? 'Intraday' : 'Swing', direction:lot.dir, entryDT:lot.time, entryPrice:lot.price, qty:zRound4(lot.qty), posSize:bkRound2(lot.price*lot.qty), source:'zerodha-sync'};
+  }
+
+  function zApplyLegs(legs){
+    var res = {closed:0, opened:0, reduced:0}, bySym = {}, add = [];
+    legs.forEach(function(l){ (bySym[l.symbol] = bySym[l.symbol]||[]).push(l); });
+    Object.keys(bySym).forEach(function(sym){
+      var existing = (db.trades||[]).filter(function(t){ return !t.exitDT && (t.ticker||'').toUpperCase()===sym && parseFloat(t.qty)>0 && !isNaN(parseFloat(t.entryPrice)); })
+        .sort(function(a,b){ return (a.entryDT||a.date||'').localeCompare(b.entryDT||b.date||''); });
+      var mk = function(t){ return {trade:t, qty:parseFloat(t.qty), price:parseFloat(t.entryPrice), time:t.entryDT||((t.date||todayKey())+'T09:15'), dir:t.direction==='short'?'short':'long', slices:[]}; };
+      var longs = existing.filter(function(t){ return t.direction!=='short'; }).map(mk), shorts = existing.filter(function(t){ return t.direction==='short'; }).map(mk);
+      var all = longs.concat(shorts);
+      bySym[sym].sort(function(a,b){ return a.time.localeCompare(b.time); }).forEach(function(leg){
+        var qty = leg.qty, isBuy = leg.side==='buy', against = isBuy ? shorts : longs;
+        while(qty>0.0001 && against.length){
+          var lot = against[0], m = Math.min(qty, lot.qty);
+          lot.slices.push({qty:zRound4(m), price:leg.price, time:leg.time}); lot.qty -= m; qty -= m;
+          if(lot.qty<=0.0001) against.shift();
+        }
+        if(qty>0.0001){ var nl = {trade:null, qty:qty, price:leg.price, time:leg.time, dir:isBuy?'long':'short', slices:[], product:leg.product}; (isBuy?longs:shorts).push(nl); all.push(nl); }
+      });
+      all.forEach(function(lot){
+        var remaining = lot.qty>0.0001 ? lot.qty : 0, sl = lot.slices;
+        if(!sl.length){ if(!lot.trade){ add.push(zOpenObj(lot, sym)); res.opened++; } return; }
+        if(lot.trade){
+          var t = lot.trade;
+          if(!remaining){ zCloseInto(t, sl[0]); res.closed++; for(var i=1;i<sl.length;i++){ add.push(zClosedCopy(t, sl[i])); res.closed++; } }
+          else {
+            sl.forEach(function(s){ add.push(zClosedCopy(t, s)); res.closed++; });
+            t.qty = zRound4(remaining); t.posSize = bkRound2(parseFloat(t.entryPrice)*remaining); t.partiallyExited = true; res.reduced++;
+          }
+        } else {
+          sl.forEach(function(s){
+            var o = buildTradeObject({ticker:sym, direction:lot.dir, entryDT:lot.time, entryPrice:lot.price, exitDT:s.time, exitPrice:s.price, qty:s.qty});
+            o.source = 'zerodha-sync'; add.push(o); res.closed++;
+          });
+          if(remaining){ add.push(zOpenObj(Object.assign({}, lot, {qty:remaining}), sym)); res.opened++; }
+        }
+      });
+    });
+    add.forEach(function(t){ db.trades.push(t); });
+    return res;
+  }
+
+  async function zSyncNow(){
+    if(zSyncBusy) return null;
+    zSyncBusy = true;
+    try{
+      var r = await bkGet('/trades'), st = zState(), seen = new Set(st.seen||[]);
+      var legs = (r.trades||[]).filter(function(l){ return l.symbol && l.qty>0 && l.price>0; });
+      var fresh = zMergeOrders(legs.filter(function(l){ return !seen.has(l.tradeId); }));
+      var skipped = 0, apply = [];
+      fresh.forEach(function(l){ if(zLegAlreadyBooked(l)) skipped++; else apply.push(l); });
+      var res = zApplyLegs(apply);
+      legs.forEach(function(l){ seen.add(l.tradeId); });
+      st.seen = Array.from(seen).slice(-3000); st.lastAt = Date.now();
+      var msg;
+      if(!legs.length) msg = 'No Zerodha trades today yet.';
+      else if(!fresh.length) msg = 'Nothing new — all '+legs.length+' of today\'s fills were already synced.';
+      else msg = 'Synced '+legs.length+' fill'+(legs.length===1?'':'s')+': '+res.closed+' trade'+(res.closed===1?'':'s')+' closed, '+res.opened+' position'+(res.opened===1?'':'s')+' opened'+(res.reduced?', '+res.reduced+' reduced':'')+(skipped?'; '+skipped+' already in your journal':'')+'.';
+      st.lastSummary = msg;
+      if(fresh.length){ saveDB(); renderAll(); }
+      bkRefreshQuotes();
+      return {msg:msg, res:res, skipped:skipped, fills:legs.length, changed:!!(res.closed||res.opened||res.reduced)};
+    }catch(e){
+      if(e.code==='kite_login') bkLoginNeeded = true;
+      throw e;
+    }finally{ zSyncBusy = false; }
+  }
+
+  function zPaintResult(text, isErr){ var el = bkEl('zSyncResult'); if(el){ el.textContent = text||''; el.className = 'sync-result'+(isErr?' err':''); } }
+  async function zRefreshTag(){
+    var tag = bkEl('zSyncTag'), btn = bkEl('zSyncBtn'); if(!tag) return;
+    if(!bkReady()){ tag.textContent = 'not set up'; if(btn) btn.disabled = false; zPaintResult('Add your broker proxy in Settings → Broker connection first.', false); return; }
+    try{
+      var s = await bkGet('/status', null, 12000); bkStatusCache = s;
+      tag.textContent = !s.kite.configured ? 'Zerodha not configured' : (s.kite.connected ? 'connected' : 'login needed');
+      var st = zState(); if(st.lastAt) zPaintResult('Last sync '+new Date(st.lastAt).toLocaleString('en-IN',{day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})+' — '+(st.lastSummary||''), false);
+    }catch(e){ tag.textContent = 'unreachable'; zPaintResult(e.message, true); }
+  }
+  async function zSyncClick(){
+    var btn = bkEl('zSyncBtn'); if(btn){ btn.disabled = true; btn.textContent = 'Syncing…'; }
+    zPaintResult('Fetching today\'s trades…', false);
+    try{ var r = await zSyncNow(); if(r){ zPaintResult(r.msg, false); if(r.changed) showToast('Zerodha sync done.', 'success'); } }
+    catch(e){ zPaintResult(e.message+(e.code==='kite_login' ? ' Use “Connect Zerodha” in Settings → Broker connection.' : ''), true); }
+    finally{ if(btn){ btn.disabled = false; btn.textContent = 'Sync now'; } zRefreshTag(); }
+  }
+
+  function zAutoTick(){
+    if(!bkCfg().autoSync || !bkReady() || zSyncBusy || bkLoginNeeded) return;
+    var d = bkIstNow(), dow = d.getUTCDay(); if(dow===0 || dow===6) return;
+    var mins = d.getUTCHours()*60+d.getUTCMinutes(), st = zState();
+    var istDay = d.toISOString().slice(0,10);
+    var due = false;
+    if(mins>=560 && mins<=935 && Date.now()-(st.lastAt||0) > 15*60000) due = true;                 // 09:20–15:35 IST, every 15 min
+    if(mins>=940 && st.lastCloseDay!==istDay) due = true;                                           // once after close
+    if(!due) return;
+    zSyncNow().then(function(r){ if(mins>=940) zState().lastCloseDay = istDay; if(r && r.changed) showToast('Zerodha trades synced: '+r.msg, 'success'); }).catch(function(e){ if(e.code!=='kite_login') console.warn('auto-sync', e.message); });
+  }
+  function zStartAuto(){ if(zAutoTimer) return; zAutoTimer = setInterval(zAutoTick, 60000); setTimeout(zAutoTick, 4000); }
+
+  // =====================================================================
+  // XLSX: find the header row wherever it is, in any sheet
+  // =====================================================================
+  var XLSX_HEADER_HINTS = (function(){
+    var s = new Set(['isin','trade id','trade_id','order id','order_id','exchange','segment','series','buy value','sell value','entry date','exit date','quantity','symbol','trade_date','trade_type','price']);
+    [LEG_HEADER_ALIASES, GENERIC_HEADER_ALIASES].forEach(function(t){ Object.keys(t).forEach(function(k){ t[k].forEach(function(a){ s.add(a); }); }); });
+    return s;
+  })();
+  function xlsxExtractTables(wb){
+    var tables = [];
+    wb.SheetNames.forEach(function(name){
+      var grid = XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, defval:'', raw:true});
+      for(var i=0; i<Math.min(grid.length, 150); i++){
+        var cells = grid[i].map(function(c){ return String(c==null?'':c).trim().toLowerCase(); });
+        var hits = cells.filter(function(c){ return c && XLSX_HEADER_HINTS.has(c); }).length;
+        if(hits<4) continue;
+        var records = [], started = false;
+        for(var j=i+1; j<grid.length; j++){
+          var row = grid[j], nonEmpty = row.some(function(c){ return String(c==null?'':c).trim()!==''; });
+          if(!nonEmpty){ if(started) break; continue; }
+          var first = String(row.filter(function(c){ return String(c==null?'':c).trim()!==''; })[0]).trim().toLowerCase();
+          if(first==='total' || first==='grand total') continue;
+          started = true;
+          var obj = {}; cells.forEach(function(h,k){ if(h) obj[h] = xlsxCellToStr(row[k]); });
+          records.push(obj);
+        }
+        tables.push({sheet:name, headers:cells.filter(Boolean), records:records});
+        break;
+      }
+    });
+    return tables;
+  }
+
+  // =====================================================================
+  // UI wiring: settings card, panel activation, delegated clicks, startup
+  // =====================================================================
+  function bkRenderStatusList(s, err){
+    var el = bkEl('bkStatusList'), kiteBtn = bkEl('bkConnectKiteBtn'); if(!el) return;
+    if(err){ el.innerHTML = '<div class="bk-status-item"><span class="nm">Proxy</span><span class="st bad">'+escapeHtml(err)+'</span></div>'; if(kiteBtn) kiteBtn.style.display = 'none'; return; }
+    if(!s){ el.innerHTML = ''; if(kiteBtn) kiteBtn.style.display = 'none'; return; }
+    var item = function(nm, st, cls){ return '<div class="bk-status-item"><span class="nm">'+nm+'</span><span class="st '+cls+'">'+st+'</span></div>'; };
+    var h = item('Proxy', 'reachable'+(s.persistent ? '' : ' · ⚠ no KV bound (Zerodha login won\'t persist)'), s.persistent ? 'ok' : 'warn');
+    h += item('Zerodha', !s.kite.configured ? 'not configured on proxy' : (s.kite.connected ? 'connected until ~6 AM' : 'login needed today'), !s.kite.configured ? 'warn' : (s.kite.connected ? 'ok' : 'bad'));
+    h += item('Groww', s.groww.configured ? 'ready' : 'not configured on proxy', s.groww.configured ? 'ok' : 'warn');
+    el.innerHTML = h;
+    if(kiteBtn) kiteBtn.style.display = (s.kite.configured && !s.kite.connected) ? '' : 'none';
+    bkLoginNeeded = s.kite.configured && !s.kite.connected && !s.groww.configured;
+  }
+  async function bkTestConnection(){
+    var el = bkEl('bkStatusList'); if(el) el.innerHTML = '<div class="bk-status-item"><span class="nm">Checking…</span></div>';
+    try{ var s = await bkGet('/status', null, 15000); bkStatusCache = s; bkRenderStatusList(s); return s; }
+    catch(e){ bkRenderStatusList(null, e.message); return null; }
+  }
+  async function bkKiteLogin(){
+    try{
+      var r = await bkGet('/kite/login-url', {'return': location.protocol==='file:' ? '' : location.href.split('#')[0]});
+      location.href = r.url;
+    }catch(e){ showToast(e.message, 'error'); }
+  }
+  function bkInitSettingsUI(){
+    var c = bkCfg(); if(!bkEl('bkUrl')) return;
+    bkEl('bkUrl').value = c.url; bkEl('bkKey').value = c.appKey; bkEl('bkPref').value = c.pref;
+    bkEl('bkLiveToggle').checked = c.livePrices !== false; bkEl('bkAutoSyncToggle').checked = !!c.autoSync;
+    var zt = bkEl('zAutoSyncToggle'); if(zt) zt.checked = !!c.autoSync;
+    bkEl('bkSaveBtn').addEventListener('click', async function(){
+      c.url = bkEl('bkUrl').value.trim().replace(/\/+$/,''); c.appKey = bkEl('bkKey').value.trim(); c.pref = bkEl('bkPref').value;
+      bkSaveCfg(); bkResolveTried = {}; tcCache = {};
+      if(!bkReady()){ bkRenderStatusList(null, 'Enter both the proxy URL and the app key.'); return; }
+      var s = await bkTestConnection();
+      if(s){ showToast('Broker proxy connected.', 'success'); bkResolveUnmapped().then(function(){ bkRefreshQuotes(); }); try{ renderTradeDashboard(); }catch(e){} }
+    });
+    bkEl('bkClearBtn').addEventListener('click', function(){
+      if(!confirm('Remove the broker proxy from this device? Live prices, benchmarks and sync will stop until you add it again.')) return;
+      c.url = ''; c.appKey = ''; c.autoSync = false; bkSaveCfg(); bkEl('bkUrl').value = ''; bkEl('bkKey').value = ''; bkEl('bkAutoSyncToggle').checked = false;
+      liveQuotes = {}; benchmarkMemCache = {}; bkRenderStatusList(null); bkSetLive('off'); showToast('Broker removed from this device.');
+    });
+    bkEl('bkLiveToggle').addEventListener('change', function(e){ c.livePrices = e.target.checked; bkSaveCfg(); if(c.livePrices) bkMaybeRefresh(); });
+    var setAuto = function(v){ c.autoSync = v; bkSaveCfg(); bkEl('bkAutoSyncToggle').checked = v; if(zt) zt.checked = v; if(v) zStartAuto(); };
+    bkEl('bkAutoSyncToggle').addEventListener('change', function(e){ setAuto(e.target.checked); });
+    if(zt) zt.addEventListener('change', function(e){ setAuto(e.target.checked); });
+    bkEl('bkConnectKiteBtn').addEventListener('click', bkKiteLogin);
+    if(bkReady()) bkTestConnection();
+  }
+
+  function onTradePanelActivated(name){
+    if(name==='pnl'){ renderPnlPanel(); bkMaybeRefresh(); }
+    else if(name==='chart'){ tcInit(); tcRefreshTickerList(); tcChromeDirty = true; tcLoad(); bkMaybeRefresh(); }
+    else if(name==='overview'){ try{ renderTradeOverview(); }catch(e){} bkMaybeRefresh(); }
+  }
+
+  document.addEventListener('click', function(e){
+    var t;
+    if((t = e.target.closest('[data-chart-ticker]'))){ e.preventDefault(); tcOpen(t.getAttribute('data-chart-ticker')); return; }
+    if((t = e.target.closest('[data-chart-trade]'))){ e.stopPropagation(); tcOpen(t.getAttribute('data-chart-trade')); return; }
+    if(e.target.closest('[data-goto-settings]')){ switchToView('settings', 'brokerCard'); return; }
+    if(e.target.closest('[data-kite-login]')){ bkKiteLogin(); return; }
+    var mapBtn = e.target.closest('.pl-unmapped-row button');
+    if(mapBtn){
+      var row = mapBtn.closest('[data-map-ticker]'), val = row.querySelector('input').value.trim().toUpperCase();
+      if(!val){ showToast('Enter a symbol first.', 'error'); return; }
+      bkSymbolMap()[row.getAttribute('data-map-ticker')] = val; try{ saveDB(); }catch(err){}
+      showToast('Saved symbol '+val+'.', 'success'); tcCache = {}; bkRefreshQuotes().then(function(){ renderPnlPanel(); });
+    }
+  });
+  var plToggleEl = bkEl('plPeriodToggle');
+  if(plToggleEl) plToggleEl.addEventListener('click', function(e){
+    var b = e.target.closest('[data-pl]'); if(!b) return; plPeriod = b.dataset.pl;
+    plToggleEl.querySelectorAll('.eq-range-btn').forEach(function(x){ x.classList.toggle('on', x===b); }); renderPnlPanel();
+  });
+  var plRefreshEl = bkEl('plRefreshBtn');
+  if(plRefreshEl) plRefreshEl.addEventListener('click', function(){ if(!bkReady()){ switchToView('settings','brokerCard'); return; } bkRefreshQuotes(); });
+  var zBtnEl = bkEl('zSyncBtn'); if(zBtnEl) zBtnEl.addEventListener('click', zSyncClick);
+
+  // drag & drop for the import file zone
+  (function(){
+    var dz = bkEl('csvDropZone'), inp = bkEl('csvImportFile'); if(!dz || !inp) return;
+    ['dragenter','dragover'].forEach(function(ev){ dz.addEventListener(ev, function(e){ e.preventDefault(); dz.classList.add('over'); }); });
+    ['dragleave','drop'].forEach(function(ev){ dz.addEventListener(ev, function(e){ e.preventDefault(); dz.classList.remove('over'); }); });
+    dz.addEventListener('drop', function(e){ var f = e.dataTransfer && e.dataTransfer.files; if(f && f.length){ try{ inp.files = f; }catch(err){} inp.dispatchEvent(new Event('change', {bubbles:true})); } });
+  })();
+
+  // Back from the Zerodha login redirect?
+  if(/broker=kite-ok/.test(location.hash)){
+    try{ history.replaceState(null, '', location.href.split('#')[0]); }catch(e){}
+    bkLoginNeeded = false; setTimeout(function(){ showToast('Zerodha connected for today.', 'success'); bkRefreshQuotes(); bkTestConnection(); }, 600);
+  }
+  bkInitSettingsUI();
+  bkStartLoop();
+  if(bkCfg().autoSync && bkReady()) zStartAuto();
+  setTimeout(function(){
+    if(bkReady() && bkCfg().livePrices && appSettings.isTrader){ bkResolveUnmapped().then(function(){ bkRefreshQuotes(); }); }
+    else bkPaintBadges();
+  }, 1800);
 
   initSettingsPanel();
   renderStudyAnalysis();
