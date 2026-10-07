@@ -2147,6 +2147,20 @@
   .drop-zone b{ color:var(--ink); }
   .file-chip-row{ display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-top:8px; }
   .file-chip{ font-size:10.5px; font-weight:800; padding:2px 8px; border-radius:999px; background:var(--surface); border:1px solid var(--line); color:var(--ink-dim); font-family:'IBM Plex Mono'; }
+
+  /* ---- Trade Log: merged groups, simpler form, clearer chart ---- */
+  .tr-step{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);margin:2px 0 12px;}
+  .tr-simple .form-section{margin-top:12px;}
+  .tr-simple summary .tr-opt{font-weight:400;font-size:11.5px;color:var(--ink-faint);margin-left:8px;}
+  .tr-group{margin-bottom:14px;}
+  .tr-seg{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:10px;}
+  .tr-seg::-webkit-scrollbar{display:none;}
+  .tr-seg-btn{flex-shrink:0;padding:7px 13px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink-dim);font:600 12px 'Inter',sans-serif;cursor:pointer;}
+  .tr-seg-btn.on{background:var(--ink);border-color:var(--ink);color:var(--bg);}
+  .tr-pane{display:none;} .tr-pane.on{display:block;}
+  .tr-pane>.td-card{margin-bottom:0;}
+  .tc-lbl{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-faint);}
+  .tc-tip .b{color:#7DB2FF !important;} .tc-tip .s{color:#FFBE80 !important;}
 </style>
 </head>
 <body class="on-home-view">
@@ -2791,40 +2805,24 @@
   </div>
 
   <!-- ===================== TRADE LOG VIEW ===================== -->
-  <section class="view" id="view-trades">
+<section class="view" id="view-trades">
 
     <div class="trade-subnav-row">
       <div class="trade-subnav" id="tradeSubnav">
         <button class="trade-subnav-btn active" data-tpanel="overview">Overview</button>
         <button class="trade-subnav-btn" data-tpanel="pnl">P&amp;L</button>
         <button class="trade-subnav-btn" data-tpanel="chart">Chart</button>
-        <button class="trade-subnav-btn" data-tpanel="history">History</button>
-        <button class="trade-subnav-btn" data-tpanel="analytics">Analytics</button>
-        <button class="trade-subnav-btn" data-tpanel="lessons">Lessons</button>
+        <button class="trade-subnav-btn" data-tpanel="history">Trades</button>
+        <button class="trade-subnav-btn" data-tpanel="analytics">Analysis</button>
         <button class="trade-subnav-btn entry-btn" data-tpanel="entry">+ New Trade</button>
       </div>
       <button class="amount-visibility-toggle" id="tradeAmountToggleBtn" title="Showing ₹ amounts — tap to hide" aria-label="Toggle amount visibility"></button>
     </div>
 
-    <!-- ---- OVERVIEW PANEL ---- -->
-    <div class="trade-panel active" id="tpanel-overview">
+<div class="trade-panel active" id="tpanel-overview">
       <div id="tdDailyLimitBanner"></div>
       <div class="td-hero-card" id="tdHeroCard"></div>
       <div class="td-stat-grid" id="tdOverviewStats"></div>
-      <div class="td-card" id="tdLessonsCarouselCard" style="display:none;">
-        <div class="td-card-head" style="flex-wrap:wrap; gap:8px;">
-          <span>Lessons Reminder</span>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <button class="eq-range-btn" id="lessonsCarouselPrevBtn" aria-label="Previous lesson" style="padding:4px 10px;">‹</button>
-            <span class="td-card-sub" id="lessonsCarouselPos" style="margin:0; display:block;"></span>
-            <button class="eq-range-btn" id="lessonsCarouselNextBtn" aria-label="Next lesson" style="padding:4px 10px;">›</button>
-          </div>
-        </div>
-        <div id="lessonsCarouselViewport" style="overflow:hidden;">
-          <div id="lessonsCarouselTrack" style="display:flex; transition:transform .35s var(--ease);"></div>
-        </div>
-        <div id="lessonsCarouselDots" style="display:flex; gap:6px; justify-content:center; margin-top:12px;"></div>
-      </div>
       <div class="td-card" id="tdOpenAllocCard" style="display:none;">
         <div class="td-card-head" style="flex-wrap:wrap; gap:8px;">
           <span>Open Position Allocation</span>
@@ -2855,6 +2853,21 @@
         <div class="cmp-since-box" id="tdEquityCmpSince" style="display:none;"></div>
         <div id="tdEquityChart"></div>
       </div>
+      <div class="td-card" id="tdLessonsCarouselCard" style="display:none;">
+        <div class="td-card-head" style="flex-wrap:wrap; gap:8px;">
+          <span>Lessons Reminder</span>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="eq-range-btn" id="lessonsCarouselPrevBtn" aria-label="Previous lesson" style="padding:4px 10px;">‹</button>
+            <span class="td-card-sub" id="lessonsCarouselPos" style="margin:0; display:block;"></span>
+            <button class="eq-range-btn" id="lessonsCarouselNextBtn" aria-label="Next lesson" style="padding:4px 10px;">›</button>
+          </div>
+        </div>
+        <div id="lessonsCarouselViewport" style="overflow:hidden;">
+          <div id="lessonsCarouselTrack" style="display:flex; transition:transform .35s var(--ease);"></div>
+        </div>
+        <div id="lessonsCarouselDots" style="display:flex; gap:6px; justify-content:center; margin-top:12px;"></div>
+      </div>
+<div class="tr-group"><div class="tr-seg"><button class="tr-seg-btn on" data-g="g1" data-p="0">Return vs deposits</button><button class="tr-seg-btn" data-g="g1" data-p="1">XIRR</button><button class="tr-seg-btn" data-g="g1" data-p="2">Top 5 trades</button></div><div class="tr-pane on" data-g="g1" data-p="0">
       <div class="td-card">
         <div class="td-card-head" style="flex-wrap:wrap; gap:8px;">
           <span>Return on Capital vs Deposits</span>
@@ -2882,6 +2895,7 @@
         <div class="td-card-sub" id="tdRocDepCapRange" style="margin-bottom:6px; display:block;"></div>
         <div id="tdRocDepCapChart"></div>
       </div>
+</div><div class="tr-pane" data-g="g1" data-p="1">
       <div class="td-card" id="tdXirrCard" style="display:none;">
         <div class="td-card-head"><span>Portfolio XIRR</span></div>
         <div class="td-card-sub" style="margin-bottom:8px; display:block;">Annualized return across every deposit &amp; withdrawal in Capital History, weighted by exactly when each one happened — the same math brokerage apps use for "XIRR", not a simple average.</div>
@@ -2895,35 +2909,33 @@
         <div class="cmp-note">This is shown in ₹, so it isn't directly comparable to an index — turn on "Compare vs index" on the Return on Capital chart above for the % comparison.</div>
         <div id="tdXirrChart"></div>
       </div>
+</div><div class="tr-pane" data-g="g1" data-p="2">
       <div class="td-card" id="tdTopRocCard" style="display:none;">
         <div class="td-card-head"><span>Top 5 · Return on Capital</span></div>
         <div class="td-card-sub" style="margin-bottom:8px; display:block;">Best individual closed trades by P&amp;L as a % of the capital each one tied up — highest to lowest.</div>
         <div id="tdTopRocList"></div>
       </div>
+</div></div>
+<div class="tr-group"><div class="tr-seg"><button class="tr-seg-btn on" data-g="g2" data-p="0">Weekday</button><button class="tr-seg-btn" data-g="g2" data-p="1">Month</button><button class="tr-seg-btn" data-g="g2" data-p="2">Outcomes</button><button class="tr-seg-btn" data-g="g2" data-p="3">Mix</button></div><div class="tr-pane on" data-g="g2" data-p="0">
       <div class="td-card">
-        <div class="td-card-head"><span>P&amp;L by Weekday</span></div>
         <div id="tdWeekdayChart"></div>
       </div>
-
-      <div class="td-two-col">
-        <div class="td-card">
-          <div class="td-card-head"><span>P&amp;L by Month</span></div>
+</div><div class="tr-pane" data-g="g2" data-p="1">
+<div class="td-card">
           <div id="tdMonthlyChart"></div>
         </div>
-        <div class="td-card">
-          <div class="td-card-head"><span>Trade Outcomes</span></div>
+</div><div class="tr-pane" data-g="g2" data-p="2">
+<div class="td-card">
           <div id="tdOutcomeDonut"></div>
         </div>
-      </div>
-
+</div><div class="tr-pane" data-g="g2" data-p="3">
       <div class="td-card">
-        <div class="td-card-head"><span>Trade Mix</span></div>
         <div id="tdTradeMix"></div>
       </div>
-    </div>
+</div></div>
+</div>
 
-    <!-- ---- P&L PANEL: realised vs unrealised, live prices ---- -->
-    <div class="trade-panel" id="tpanel-pnl">
+<div class="trade-panel" id="tpanel-pnl">
       <div class="bk-live-row">
         <span class="bk-live-badge" id="plLiveBadge"><span class="bk-dot"></span><span class="bk-live-text">Live prices: not set up</span></span>
         <div class="bk-actions">
@@ -2939,33 +2951,33 @@
       </div>
       <div id="plBanner"></div>
       <div class="pl-comp-grid" id="plComponents"></div>
-
-      <div class="td-two-col" style="grid-template-columns:1fr;">
+<div class="tr-group"><div class="tr-seg"><button class="tr-seg-btn on" data-g="g3" data-p="0">Realised + Unrealised</button><button class="tr-seg-btn" data-g="g3" data-p="1">Over time</button></div><div class="tr-pane on" data-g="g3" data-p="0">
         <div class="td-card">
           <div class="td-card-head"><span>Realised + Unrealised = Total</span><span class="td-card-sub" id="plWaterfallSub"></span></div>
           <div id="plWaterfall"></div>
         </div>
+</div><div class="tr-pane" data-g="g3" data-p="1">
         <div class="td-card">
           <div class="td-card-head"><span>Cumulative P&amp;L</span><span class="td-card-sub" id="plCumSub"></span></div>
           <div class="pl-legend" id="plCumLegend"></div>
           <div class="pl-chart-wrap" id="plCumChart"></div>
         </div>
-      </div>
-
+</div></div>
+<div class="tr-group"><div class="tr-seg"><button class="tr-seg-btn on" data-g="g4" data-p="0">By stock · chart</button><button class="tr-seg-btn" data-g="g4" data-p="1">By stock · table</button></div><div class="tr-pane on" data-g="g4" data-p="0">
       <div class="td-card">
         <div class="td-card-head"><span>By Stock · Realised vs Unrealised</span><span class="td-card-sub">tap a stock to open its chart</span></div>
         <div class="pl-legend"><span><i style="background:var(--teal)"></i>Realised (booked)</span><span><i style="background:var(--teal); opacity:.55"></i>Unrealised (open, hatched)</span></div>
         <div class="pl-stock-bars" id="plStockBars"></div>
       </div>
-
+</div><div class="tr-pane" data-g="g4" data-p="1">
       <div class="td-card">
         <div class="td-card-head"><span>Stock-wise Breakdown</span><span class="td-card-sub" id="plTableSub"></span></div>
         <div class="pl-table-wrap"><table class="pl-table" id="plTable"></table></div>
         <div id="plUnmapped"></div>
       </div>
-    </div>
+</div></div>
+</div>
 
-    <!-- ---- CHART PANEL: candles with your buys & sells ---- -->
     <div class="trade-panel" id="tpanel-chart">
       <div class="bk-live-row">
         <span class="bk-live-badge" id="tcLiveBadge"><span class="bk-dot"></span><span class="bk-live-text">Live prices: not set up</span></span>
@@ -2976,13 +2988,13 @@
       </div>
       <div class="tc-toolbar">
         <select class="tc-select" id="tcTicker" aria-label="Stock"></select>
-        <div class="eq-range-toggle tc-chips" id="tcInterval">
-          <button class="eq-range-btn on" data-iv="day">1D</button>
-          <button class="eq-range-btn" data-iv="week">1W</button>
-          <button class="eq-range-btn" data-iv="60minute">1H</button>
-          <button class="eq-range-btn" data-iv="15minute">15m</button>
+        <span class="tc-lbl">Candle</span><div class="eq-range-toggle tc-chips" id="tcInterval">
+          <button class="eq-range-btn on" data-iv="day">Day</button>
+          <button class="eq-range-btn" data-iv="week">Week</button>
+          <button class="eq-range-btn" data-iv="60minute">1 hour</button>
+          <button class="eq-range-btn" data-iv="15minute">15 min</button>
         </div>
-        <div class="eq-range-toggle tc-chips" id="tcRange">
+        <span class="tc-lbl">Period</span><div class="eq-range-toggle tc-chips" id="tcRange">
           <button class="eq-range-btn on" data-rg="trades">My trades</button>
           <button class="eq-range-btn" data-rg="3m">3M</button>
           <button class="eq-range-btn" data-rg="6m">6M</button>
@@ -2998,21 +3010,13 @@
         <div class="tc-tip" id="tcTip"></div>
         <div class="tc-msg" id="tcMsg" style="display:none;"></div>
       </div>
-      <div class="tc-legend">
-        <span><svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1 L11 10 L1 10 Z" fill="var(--teal)"/></svg>Buy</span>
-        <span><svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 11 L11 2 L1 2 Z" fill="var(--rose)"/></svg>Sell</span>
-        <span><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--teal)" stroke-dasharray="4,3" stroke-width="1.6"/></svg>Winning round trip</span>
-        <span><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--rose)" stroke-dasharray="4,3" stroke-width="1.6"/></svg>Losing round trip</span>
-        <span><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--accent)" stroke-width="1.6"/></svg>Avg cost (open)</span>
-        <span style="color:var(--ink-faint);">Drag to pan · pinch or Ctrl/⌘+scroll to zoom</span>
-      </div>
+      <div class="tc-legend"><span><svg width="12" height="16"><line x1="6" x2="6" y1="1" y2="15" stroke="var(--teal)"/><rect x="2" y="4" width="8" height="8" fill="var(--teal)"/></svg>Price up</span><span><svg width="12" height="16"><line x1="6" x2="6" y1="1" y2="15" stroke="var(--rose)"/><rect x="2" y="4" width="8" height="8" fill="var(--rose)"/></svg>Price down</span><span><svg width="16" height="16"><circle cx="8" cy="8" r="7.5" fill="#2F7BFF"/><text x="8" y="11.6" text-anchor="middle" font-size="10" font-weight="800" fill="#fff" font-family="Inter">B</text></svg>Your buy</span><span><svg width="16" height="16"><circle cx="8" cy="8" r="7.5" fill="#F08A24"/><text x="8" y="11.6" text-anchor="middle" font-size="10" font-weight="800" fill="#fff" font-family="Inter">S</text></svg>Your sell</span><span><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--teal)" stroke-dasharray="4,3" stroke-width="1.6"/></svg>Winning trade</span><span><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--rose)" stroke-dasharray="4,3" stroke-width="1.6"/></svg>Losing trade</span><span><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--accent)"  stroke-width="1.6"/></svg>Avg cost</span><span style="color:var(--ink-faint);">Drag to pan · pinch or Ctrl/⌘+scroll to zoom · hover for O/H/L/C</span></div>
       <div class="td-card" style="margin-top:14px;">
         <div class="td-card-head"><span>Trades in this stock</span><span class="td-card-sub">tap a row to jump to it on the chart</span></div>
         <div class="pl-table-wrap"><table class="pl-table" id="tcTrades"></table></div>
       </div>
     </div>
 
-    <!-- ---- HISTORY PANEL (List + Calendar, merged into one browsing view) ---- -->
     <div class="trade-panel" id="tpanel-history">
       <div class="td-list-head">
         <div class="td-card-head" style="margin-bottom:0;"><span>Trade History</span></div>
@@ -3083,17 +3087,15 @@
       </div>
     </div>
 
-    <!-- ---- ANALYTICS PANEL (Performance / Risk / FY & Periods, clubbed together) ---- -->
-    <div class="trade-panel" id="tpanel-analytics">
-      <div class="trade-subnav secondary" id="analyticsSubnav">
-        <button class="trade-subnav-btn active" data-apanel="strategy">Performance</button>
-        <button class="trade-subnav-btn" data-apanel="risk">Risk</button>
-        <button class="trade-subnav-btn" data-apanel="discipline">Discipline</button>
-        <button class="trade-subnav-btn" data-apanel="periods">FY &amp; Periods</button>
-      </div>
-
-      <!-- ---- Performance (by ticker / catalyst / timeframe) ---- -->
-      <div class="analytics-subpanel active" id="apanel-strategy">
+<div class="trade-panel" id="tpanel-analytics">
+<div class="trade-subnav secondary" id="analyticsSubnav">
+<button class="trade-subnav-btn active" data-apanel="strategy">Performance</button>
+<button class="trade-subnav-btn" data-apanel="risk">Risk &amp; Discipline</button>
+<button class="trade-subnav-btn" data-apanel="periods">Periods</button>
+<button class="trade-subnav-btn" data-apanel="lessons">Lessons</button>
+</div>
+<div class="analytics-subpanel active" id="apanel-strategy">
+<div class="tr-group"><div class="tr-seg"><button class="tr-seg-btn on" data-g="g5" data-p="0">Ticker</button><button class="tr-seg-btn" data-g="g5" data-p="1">Setup</button><button class="tr-seg-btn" data-g="g5" data-p="2">Timeframe</button><button class="tr-seg-btn" data-g="g5" data-p="3">Position size</button></div><div class="tr-pane on" data-g="g5" data-p="0">
         <div class="td-card">
           <div class="td-list-head">
             <div class="td-card-head" style="margin-bottom:0;"><span>Performance by Ticker</span></div>
@@ -3106,28 +3108,27 @@
           </div>
           <div id="tdByTicker"></div>
         </div>
+</div><div class="tr-pane" data-g="g5" data-p="1">
         <div class="td-card">
-          <div class="td-card-head"><span>Performance by Catalyst / Setup</span></div>
           <div id="tdByCatalyst"></div>
         </div>
+</div><div class="tr-pane" data-g="g5" data-p="2">
         <div class="td-card">
-          <div class="td-card-head"><span>Performance by Timeframe</span></div>
           <div id="tdByTimeframe"></div>
         </div>
+</div><div class="tr-pane" data-g="g5" data-p="3">
         <div class="td-card">
-          <div class="td-card-head"><span>Performance by Position Size</span></div>
           <div class="td-card-sub" style="margin-bottom:8px; display:block;">Small / Medium / Large relative to your own trade history, not a fixed rupee cutoff.</div>
           <div id="tdByPosSize"></div>
         </div>
+</div></div>
         <div class="td-card">
           <div class="td-card-head"><span>Return on Capital vs Holding Period</span></div>
           <div class="td-card-sub" id="tdRocHoldSub" style="margin-bottom:8px; display:block;"></div>
           <div id="tdRocHoldChart"></div>
         </div>
-      </div>
-
-      <!-- ---- Risk ---- -->
-      <div class="analytics-subpanel" id="apanel-risk">
+</div>
+<div class="analytics-subpanel" id="apanel-risk">
         <div class="td-stat-grid" id="tdRiskStats"></div>
         <div class="td-card">
           <div class="td-card-head"><span>R-Multiple Distribution</span></div>
@@ -3139,59 +3140,47 @@
           <div class="td-stat-grid" id="tdCostsStats"></div>
           <div id="tdCostsBreakdown" style="margin-top:10px;"></div>
         </div>
-      </div>
-
-      <!-- ---- Discipline (turns the psychology/plan tags you log on every trade
-           into P&L numbers, instead of leaving them sitting unused in trade detail) ---- -->
-      <div class="analytics-subpanel" id="apanel-discipline">
+<div class="tr-group"><div class="tr-seg"><button class="tr-seg-btn on" data-g="g6" data-p="0">Plan followed</button><button class="tr-seg-btn" data-g="g6" data-p="1">System</button><button class="tr-seg-btn" data-g="g6" data-p="2">Psychology</button></div><div class="tr-pane on" data-g="g6" data-p="0">
         <div class="td-card">
-          <div class="td-card-head"><span>Plan Followed vs Plan Broken</span></div>
           <div id="tdPlanAdherence"></div>
         </div>
+</div><div class="tr-pane" data-g="g6" data-p="1">
         <div class="td-card">
-          <div class="td-card-head"><span>Following Your System?</span></div>
           <div id="tdSystemAdherence"></div>
         </div>
+</div><div class="tr-pane" data-g="g6" data-p="2">
         <div class="td-card">
-          <div class="td-card-head"><span>Psychology at Entry — cost per state</span></div>
           <div id="tdPsychBreakdown"></div>
         </div>
-      </div>
-
-      <!-- ---- FY / Periods ---- -->
-      <div class="analytics-subpanel" id="apanel-periods">
+</div></div>
+</div>
+<div class="analytics-subpanel" id="apanel-periods">
         <div class="td-card">
           <div class="td-card-head"><span>Best / Worst</span></div>
           <div class="fy-bestworst-grid" id="fyBestWorstGrid"></div>
         </div>
-
         <div class="td-card">
           <div class="td-card-head"><span>This FY vs Previous FY</span></div>
           <div class="fy-compare-row" id="fyCompareRow"></div>
         </div>
-
-        <div class="td-empty-note" style="text-align:left; padding:0 2px 4px;">Want the equity curve with FY boundaries marked? Head to Overview → Equity Curve → All → tick "FY markers".</div>
-
+<div class="tr-group"><div class="tr-seg"><button class="tr-seg-btn on" data-g="g7" data-p="0">Financial year</button><button class="tr-seg-btn" data-g="g7" data-p="1">Calendar year</button><button class="tr-seg-btn" data-g="g7" data-p="2">Monthly</button></div><div class="tr-pane on" data-g="g7" data-p="0">
         <div class="td-card">
-          <div class="td-card-head"><span>Financial Year Breakdown (Apr–Mar)</span></div>
           <div style="overflow-x:auto;"><table class="fy-table" id="fyTable"></table></div>
         </div>
-
+</div><div class="tr-pane" data-g="g7" data-p="1">
         <div class="td-card">
-          <div class="td-card-head"><span>Calendar Year Breakdown</span></div>
           <div style="overflow-x:auto;"><table class="fy-table" id="yearTable"></table></div>
         </div>
-
+</div><div class="tr-pane" data-g="g7" data-p="2">
         <div class="td-card">
-          <div class="td-card-head"><span>Monthly Breakdown</span></div>
           <div class="fy-range-row">
             <div class="fy-range-field"><label>Financial Year</label><select id="fyMonthFilter"></select></div>
           </div>
           <div style="overflow-x:auto;"><table class="fy-table" id="monthTable"></table></div>
         </div>
-
+</div></div>
+<details class="form-section"><summary>Compare two custom periods</summary><div class="form-section-body">
         <div class="td-card">
-          <div class="td-card-head"><span>Compare Two Custom Periods</span></div>
           <div class="fy-range-row">
             <div class="fy-range-field"><label>Period A – from</label><input type="date" id="cmpAFrom"></div>
             <div class="fy-range-field"><label>Period A – to</label><input type="date" id="cmpATo"></div>
@@ -3201,11 +3190,9 @@
           </div>
           <div class="fy-compare-row" id="cmpResultRow"></div>
         </div>
-      </div>
-    </div>
-
-    <!-- ---- LESSONS PANEL (merged, deduped "one lesson" notes from every trade) ---- -->
-    <div class="trade-panel" id="tpanel-lessons">
+</div></details>
+</div>
+<div class="analytics-subpanel" id="apanel-lessons">
       <div class="td-list-head">
         <div class="td-card-head" style="margin-bottom:0;"><span>Lessons Learned</span></div>
         <div class="trades-result-count" id="lessonsResultCount"></div>
@@ -3214,33 +3201,28 @@
         Every "One lesson" note from your closed trades is grouped here — repeats are merged into one card with a count, so the mistakes you keep making rise to the top instead of getting buried in the log.
       </div>
       <div id="lessonsList"></div>
-    </div>
+</div>
+</div>
 
-    <!-- ---- NEW TRADE ENTRY PANEL ---- -->
-    <div class="trade-panel" id="tpanel-entry">
-    <div class="card">
+<div class="trade-panel" id="tpanel-entry">
+    <div class="card tr-simple">
       <div class="card-title" id="tradeFormTitle">New Trade Entry</div>
-
-      <details class="form-section" open>
-        <summary>Setup</summary>
-        <div class="form-section-body">
-          <div class="modal-row">
-            <div class="modal-field"><label>Ticker</label><input type="text" id="trTicker" placeholder="e.g. RELIANCE"></div>
-            <div class="modal-field"><label>Date</label><input type="date" id="trDate"></div>
-          </div>
-          <div class="modal-row">
+      <div class="tr-step">1 · The trade</div>
+<div class="modal-row">            <div class="modal-field"><label>Ticker</label><input type="text" id="trTicker" placeholder="e.g. RELIANCE"></div>            <div class="modal-field"><label>Date</label><input type="date" id="trDate"></div></div>
             <div class="modal-field">
-              <label>Timeframe</label>
-              <select id="trTimeframe"><option>Intraday</option><option>Swing</option><option>Positional</option></select>
-            </div>
-            <div class="modal-field"><label>Conviction</label>
-              <div class="picker-row" id="trConviction">
-                <div class="picker-btn" data-val="1">1</div><div class="picker-btn" data-val="2">2</div>
-                <div class="picker-btn" data-val="3">3</div><div class="picker-btn" data-val="4">4</div><div class="picker-btn" data-val="5">5</div>
+              <label>Direction</label>
+              <div class="picker-row" id="trDirection">
+                <div class="picker-btn on" data-val="long" style="width:auto; padding:0 14px;">Long</div><div class="picker-btn" data-val="short" style="width:auto; padding:0 14px;">Short</div>
               </div>
             </div>
-          </div>
-          <div class="modal-field"><label>Market context</label><input type="text" id="trContext" placeholder="Nifty/sector sentiment, one line"></div>
+<div class="modal-row">            <div class="modal-field"><label>Entry price</label><input type="number" id="trEntryPrice" step="0.01"></div>            <div class="modal-field"><label>Qty</label><input type="number" id="trQty"></div></div>
+<div class="modal-row">            <div class="modal-field"><label>Stop loss price</label><input type="number" id="trSLPrice" step="0.01"></div>            <div class="modal-field">
+              <label>Timeframe</label>
+              <select id="trTimeframe"><option>Intraday</option><option>Swing</option><option>Positional</option></select>
+            </div></div>
+          <div class="tr-risk-indicator" id="trAllocIndicator" style="display:none;"></div>
+          <div class="tr-risk-indicator" id="trSlDistIndicator" style="display:none;"></div>
+          <div class="tr-risk-indicator" id="trRiskIndicator" style="display:none;"></div>
           <div class="modal-field">
             <label>Setup type</label>
             <div class="picker-row" id="trSetupType">
@@ -3254,84 +3236,10 @@
               <div class="picker-btn" data-val="Other" style="width:auto; padding:0 12px;">Other</div>
             </div>
           </div>
-          <div class="modal-field"><label>Catalyst / detail <span style="font-weight:400; color:var(--ink-faint);">optional</span></label><input type="text" id="trCatalyst" placeholder="Result / order win / volume spike / chart only"></div>
-          <div class="modal-field"><label>Planned entry price <span style="font-weight:400; color:var(--ink-faint);">optional — the price in your plan, before you pulled the trigger</span></label><input type="number" id="trPlannedEntry" step="0.01"></div>
-        </div>
-      </details>
-
-      <details class="form-section">
-        <summary>Entry</summary>
-        <div class="form-section-body">
-          <div class="modal-row">
-            <div class="modal-field"><label>Entry date & time</label><input type="datetime-local" id="trEntryDT"></div>
-            <div class="modal-field"><label>Entry price</label><input type="number" id="trEntryPrice" step="0.01"></div>
-          </div>
-          <div class="tr-risk-indicator" id="trSlippageIndicator" style="display:none;"></div>
-          <div class="modal-row">
-            <div class="modal-field">
-              <label>Direction</label>
-              <div class="picker-row" id="trDirection">
-                <div class="picker-btn on" data-val="long" style="width:auto; padding:0 14px;">Long</div><div class="picker-btn" data-val="short" style="width:auto; padding:0 14px;">Short</div>
-              </div>
-            </div>
-            <div class="modal-field"><label>Qty</label><input type="number" id="trQty"></div>
-          </div>
-          <div class="modal-row">
-            <div class="modal-field"><label>Position size (₹) <span style="font-weight:400; color:var(--ink-faint);">auto</span></label><input type="number" id="trPosSize"></div>
-          </div>
-          <div class="tr-risk-indicator" id="trAllocIndicator" style="display:none;"></div>
-          <div class="modal-row">
-            <div class="modal-field"><label>Stop loss price</label><input type="number" id="trSLPrice" step="0.01"></div>
-            <div class="modal-field"><label>Risk %</label><input type="number" id="trSLPct" step="0.1"></div>
-          </div>
-          <div class="tr-risk-indicator" id="trSlDistIndicator" style="display:none;"></div>
-          <div class="tr-risk-indicator" id="trRiskIndicator" style="display:none;"></div>
-          <div class="modal-field"><label>Why this trade, why now</label><textarea id="trThesisWhy"></textarea></div>
-          <div class="modal-field"><label>What invalidates it</label><textarea id="trThesisInvalidate"></textarea></div>
-        </div>
-      </details>
-
-      <details class="form-section">
-        <summary>Psychology at Entry</summary>
-        <div class="form-section-body">
-          <div class="modal-field">
-            <label>State</label>
-            <div class="chip-group" id="trPsychChips">
-              <div class="chip" data-tag="calm">calm</div><div class="chip" data-tag="confident">confident</div>
-              <div class="chip rose" data-tag="fomo">fomo</div><div class="chip rose" data-tag="revenge">revenge</div>
-              <div class="chip rose" data-tag="boredom">boredom</div><div class="chip rose" data-tag="overconfident">overconfident</div>
-            </div>
-          </div>
-          <div class="modal-field">
-            <label>Following my system?</label>
-            <div class="chip-group">
-              <div class="chip" id="trSysYes" data-yn="yes">yes</div><div class="chip rose" id="trSysNo" data-yn="no">no</div>
-            </div>
-            <textarea id="trSysReason" placeholder="If no, why?" style="margin-top:8px; display:none;"></textarea>
-          </div>
-        </div>
-      </details>
-
-      <details class="form-section">
-        <summary>Management</summary>
-        <div class="form-section-body">
-          <div class="modal-field"><label>Adds / trims</label><textarea id="trAdds"></textarea></div>
-          <div class="modal-field"><label>SL moved? Why</label><textarea id="trSLMoved"></textarea></div>
-          <div class="modal-field"><label>Notes during trade</label><textarea id="trMgmtNotes"></textarea></div>
-        </div>
-      </details>
-
-      <details class="form-section">
-        <summary>Exit</summary>
-        <div class="form-section-body">
-          <div class="modal-row">
-            <div class="modal-field"><label>Exit date & price</label><input type="datetime-local" id="trExitDT"></div>
-            <div class="modal-field"><label>Exit price</label><input type="number" id="trExitPrice" step="0.01"></div>
-          </div>
-          <div class="modal-row">
-            <div class="modal-field"><label>P&L (₹) <span style="font-weight:400; color:var(--ink-faint);">auto</span></label><input type="number" id="trPnl" step="0.01"></div>
-            <div class="modal-field"><label>R-multiple <span style="font-weight:400; color:var(--ink-faint);">auto</span></label><input type="number" id="trRMultiple" step="0.1"></div>
-          </div>
+          <div class="modal-field"><label>Why this trade?</label><textarea id="trThesisWhy"></textarea></div>
+      <details class="form-section"><summary>2 · Exit <span class="tr-opt">when the trade is closed</span></summary><div class="form-section-body">
+<div class="modal-row">            <div class="modal-field"><label>Exit price</label><input type="number" id="trExitPrice" step="0.01"></div>            <div class="modal-field"><label>Exit date & price</label><input type="datetime-local" id="trExitDT"></div></div>
+<div class="modal-row">            <div class="modal-field"><label>P&L (₹) <span style="font-weight:400; color:var(--ink-faint);">auto</span></label><input type="number" id="trPnl" step="0.01"></div>            <div class="modal-field"><label>R-multiple <span style="font-weight:400; color:var(--ink-faint);">auto</span></label><input type="number" id="trRMultiple" step="0.1"></div></div>
           <div class="modal-field">
             <label>Exit reason</label>
             <div class="chip-group" id="trExitReasonChips">
@@ -3340,7 +3248,6 @@
               <div class="chip rose" data-tag="panic-exit">panic-exit</div>
             </div>
           </div>
-
           <div class="modal-field" id="trPartialExitWrap" style="display:none; margin-top:18px; padding-top:16px; border-top:1px dashed var(--line);">
             <label>Partial exit <span style="font-weight:400; color:var(--ink-faint);">book part of this position and keep the rest open</span></label>
             <div id="trPartialExitHint" style="font-size:12.5px; color:var(--ink-faint); margin:2px 0 10px;"></div>
@@ -3361,12 +3268,8 @@
               <button class="btn primary" type="button" id="trPartialExitBtn">Record Partial Exit</button>
             </div>
           </div>
-        </div>
-      </details>
-
-      <details class="form-section">
-        <summary>Review</summary>
-        <div class="form-section-body">
+      </div></details>
+      <details class="form-section"><summary>3 · Review <span class="tr-opt">plan, psychology, lesson</span></summary><div class="form-section-body">
           <div class="modal-field">
             <label>Followed plan?</label>
             <div class="chip-group">
@@ -3374,6 +3277,40 @@
               <div class="chip rose" id="trPlanBroken" data-yn="broken">plan-broken</div>
             </div>
           </div>
+          <div class="modal-field">
+            <label>State</label>
+            <div class="chip-group" id="trPsychChips">
+              <div class="chip" data-tag="calm">calm</div><div class="chip" data-tag="confident">confident</div>
+              <div class="chip rose" data-tag="fomo">fomo</div><div class="chip rose" data-tag="revenge">revenge</div>
+              <div class="chip rose" data-tag="boredom">boredom</div><div class="chip rose" data-tag="overconfident">overconfident</div>
+            </div>
+          </div>
+          <div class="modal-field">
+            <label>Following my system?</label>
+            <div class="chip-group">
+              <div class="chip" id="trSysYes" data-yn="yes">yes</div><div class="chip rose" id="trSysNo" data-yn="no">no</div>
+            </div>
+            <textarea id="trSysReason" placeholder="If no, why?" style="margin-top:8px; display:none;"></textarea>
+          </div>
+          <div class="modal-field"><label>One lesson</label><textarea id="trLesson"></textarea></div>
+      </div></details>
+      <details class="form-section"><summary>More details <span class="tr-opt">optional</span></summary><div class="form-section-body">
+            <div class="modal-field"><label>Conviction</label>
+              <div class="picker-row" id="trConviction">
+                <div class="picker-btn" data-val="1">1</div><div class="picker-btn" data-val="2">2</div>
+                <div class="picker-btn" data-val="3">3</div><div class="picker-btn" data-val="4">4</div><div class="picker-btn" data-val="5">5</div>
+              </div>
+            </div>
+          <div class="modal-field"><label>Market context</label><input type="text" id="trContext" placeholder="Nifty/sector sentiment, one line"></div>
+          <div class="modal-field"><label>Catalyst / detail <span style="font-weight:400; color:var(--ink-faint);">optional</span></label><input type="text" id="trCatalyst" placeholder="Result / order win / volume spike / chart only"></div>
+          <div class="modal-field"><label>Planned entry price <span style="font-weight:400; color:var(--ink-faint);">optional — the price in your plan, before you pulled the trigger</span></label><input type="number" id="trPlannedEntry" step="0.01"></div>
+            <div class="modal-field"><label>Entry date & time</label><input type="datetime-local" id="trEntryDT"></div>
+            <div class="modal-field"><label>Position size (₹) <span style="font-weight:400; color:var(--ink-faint);">auto</span></label><input type="number" id="trPosSize"></div>
+            <div class="modal-field"><label>Risk %</label><input type="number" id="trSLPct" step="0.1"></div>
+          <div class="modal-field"><label>What invalidates it</label><textarea id="trThesisInvalidate"></textarea></div>
+          <div class="modal-field"><label>Adds / trims</label><textarea id="trAdds"></textarea></div>
+          <div class="modal-field"><label>SL moved? Why</label><textarea id="trSLMoved"></textarea></div>
+          <div class="modal-field"><label>Notes during trade</label><textarea id="trMgmtNotes"></textarea></div>
           <div class="modal-field">
             <label>Process grade (not outcome)</label>
             <div class="picker-row" id="trGrade">
@@ -3389,15 +3326,13 @@
               <div class="chip" data-tag="lucky">lucky</div><div class="chip rose" data-tag="unlucky">unlucky</div>
             </div>
           </div>
-          <div class="modal-field"><label>One lesson</label><textarea id="trLesson"></textarea></div>
           <div class="modal-field">
             <label>Chart screenshot (stored on this device only — not synced to cloud)</label>
             <input type="file" id="trScreenshot" accept="image/*">
             <div id="trScreenshotPreview" style="margin-top:8px;"></div>
           </div>
-        </div>
-      </details>
-
+          <div class="tr-risk-indicator" id="trSlippageIndicator" style="display:none;"></div>
+      </div></details>
       <div class="modal-actions">
         <button class="btn primary" id="trSaveBtn">Save Trade</button>
         <button class="btn ghost" id="trCancelBtn" style="display:none;">Cancel edit</button>
@@ -9004,7 +8939,16 @@
   // keeps the subnav button state in sync. Shared by the subnav click handler and editTrade(),
   // so opening the entry form for editing reliably shows the form instead of whatever panel
   // happened to be active.
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('.tr-seg-btn'); if(!b) return;
+    var g = b.dataset.g, p = b.dataset.p;
+    document.querySelectorAll('.tr-seg-btn[data-g="'+g+'"]').forEach(function(x){ x.classList.toggle('on', x===b); });
+    document.querySelectorAll('.tr-pane[data-g="'+g+'"]').forEach(function(x){ x.classList.toggle('on', x.dataset.p===p); });
+    try{ renderTradeDashboard(); }catch(err){}
+    try{ if(typeof renderPnlPanel==='function') renderPnlPanel(); }catch(err){}
+  });
   function activateTradePanel(name){
+    if(!document.querySelector('#tradeSubnav [data-tpanel="'+name+'"]')) name='overview';
     const nav = document.getElementById('tradeSubnav');
     if(nav) nav.querySelectorAll('.trade-subnav-btn').forEach(b=> b.classList.toggle('active', b.dataset.tpanel===name));
     document.querySelectorAll('#view-trades .trade-panel').forEach(p=>p.classList.remove('active'));
@@ -12336,9 +12280,7 @@
     out += '<clipPath id="tcClip"><rect x="'+padL+'" y="0" width="'+plotW+'" height="'+H+'"/></clipPath><g clip-path="url(#tcClip)">';
 
     if(s.synthetic){
-      var d = ''; for(var a=i0;a<=i1;a++) d += (a===i0?'M':'L')+x(a).toFixed(1)+' '+y(candles[a].c).toFixed(1)+' ';
-      out += '<path d="'+d+'" fill="none" stroke="var(--ink-faint)" stroke-width="1.6" stroke-dasharray="4,3"/>';
-      for(var b=i0;b<=i1;b++) out += '<circle cx="'+x(b).toFixed(1)+'" cy="'+y(candles[b].c).toFixed(1)+'" r="2.6" fill="var(--ink-faint)"/>';
+      out += '<text x="'+(padL+plotW/2)+'" y="'+(padT+16)+'" text-anchor="middle" font-size="11" fill="var(--ink-faint)">Price candles unavailable — showing only your buys &amp; sells</text>';
     } else {
       var bw = Math.max(1, Math.min(14, cw*0.68)), vmax = 0;
       for(var v=i0; v<=i1; v++) vmax = Math.max(vmax, candles[v].v||0);
@@ -12347,7 +12289,7 @@
         out += '<line x1="'+cx.toFixed(1)+'" x2="'+cx.toFixed(1)+'" y1="'+y(c.h).toFixed(1)+'" y2="'+y(c.l).toFixed(1)+'" stroke="'+col+'" stroke-width="1"/>';
         var yt = y(Math.max(c.o,c.c)), yb = y(Math.min(c.o,c.c));
         out += '<rect x="'+(cx-bw/2).toFixed(1)+'" y="'+yt.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.max(1, yb-yt).toFixed(1)+'" fill="'+col+'" '+(up?'fill-opacity=".92"':'')+'/>';
-        if(vmax && c.v){ var vh = (c.v/vmax)*volH; out += '<rect x="'+(cx-bw/2).toFixed(1)+'" y="'+(H-axisH-vh).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+vh.toFixed(1)+'" fill="'+col+'" opacity=".32"/>'; }
+        if(vmax && c.v){ var vh = (c.v/vmax)*volH; out += '<rect x="'+(cx-bw/2).toFixed(1)+'" y="'+(H-axisH-vh).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+vh.toFixed(1)+'" fill="var(--ink-faint)" opacity=".30"/>'; }
       }
     }
 
@@ -12369,16 +12311,14 @@
     out += lines;
 
     // buy / sell markers
-    var showLbl = cw>=15;
     mList.forEach(function(m){
       if(m.idx<i0-1 || m.idx>i1+1) return;
-      var c = candles[m.idx], cx = x(m.idx), buy = m.side==='buy', col = buy ? 'var(--teal)' : 'var(--rose)', sz = Math.max(6, Math.min(10, cw*0.7+3));
-      var py = buy ? y(c.l)+sz+5 : y(c.h)-sz-5;
-      if(!s.synthetic){ py = buy ? Math.max(y(m.price)+sz+3, y(c.l)+sz+4) : Math.min(y(m.price)-sz-3, y(c.h)-sz-4); }
-      else py = buy ? y(m.price)+sz+4 : y(m.price)-sz-4;
-      var tri = buy ? (cx-sz)+','+(py+sz*0.9)+' '+(cx+sz)+','+(py+sz*0.9)+' '+cx+','+(py-sz*0.9) : (cx-sz)+','+(py-sz*0.9)+' '+(cx+sz)+','+(py-sz*0.9)+' '+cx+','+(py+sz*0.9);
-      out += '<polygon points="'+tri+'" fill="'+col+'" stroke="var(--surface)" stroke-width="1.5"/>';
-      if(showLbl){ var ly = buy ? py+sz+10 : py-sz-3; out += '<text x="'+cx.toFixed(1)+'" y="'+ly.toFixed(1)+'" text-anchor="middle" font-size="9.5" font-weight="800" font-family="IBM Plex Mono" fill="'+col+'" stroke="var(--surface)" stroke-width="2.5" paint-order="stroke">'+(buy?'B ':'S ')+(m.qty%1?m.qty.toFixed(2):m.qty)+'</text>'; }
+      var c = candles[m.idx], cx = x(m.idx), buy = m.side==='buy', col = buy ? '#2F7BFF' : '#F08A24', r = Math.max(7, Math.min(10, cw*0.5+4)), yp = y(m.price), cy;
+      if(s.synthetic) cy = buy ? yp+r+5 : yp-r-5; else cy = buy ? y(c.l)+r+6 : y(c.h)-r-6;
+      out += '<line x1="'+cx.toFixed(1)+'" x2="'+cx.toFixed(1)+'" y1="'+cy.toFixed(1)+'" y2="'+yp.toFixed(1)+'" stroke="'+col+'" stroke-width="1.4"/>' +
+        '<circle cx="'+cx.toFixed(1)+'" cy="'+yp.toFixed(1)+'" r="2.4" fill="'+col+'"/>' +
+        '<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+r+'" fill="'+col+'" stroke="var(--surface)" stroke-width="1.5"/>' +
+        '<text x="'+cx.toFixed(1)+'" y="'+(cy+3.6).toFixed(1)+'" text-anchor="middle" font-size="10" font-weight="800" font-family="Inter" fill="#fff">'+(buy?'B':'S')+'</text>';
     });
     out += '</g>';
     if(avgLine!==null && avgLine>=lo && avgLine<=hi) out += label(avgLine, bkPx(avgLine), 'var(--accent)', 'var(--accent-ink)');
