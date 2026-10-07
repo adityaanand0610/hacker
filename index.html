@@ -1437,6 +1437,20 @@
   .tcal-week-total-lbl{ font-size:7.5px; text-transform:uppercase; letter-spacing:0.04em; color:var(--ink-faint); font-weight:700; }
   .tcal-week-total-val{ font-family:'IBM Plex Mono'; font-size:10.5px; font-weight:700; color:var(--ink-faint); }
   .tcal-week-total-val.pos{ color:var(--teal-dim); }
+  /* unrealised-snapshot additions */
+  .tcal-week-u{ font-family:'IBM Plex Mono'; font-size:8.5px; font-weight:700; color:var(--ink-faint); margin-top:2px; white-space:nowrap; }
+  .tcal-week-u.pos{ color:var(--teal-dim); opacity:.85; } .tcal-week-u.neg{ color:var(--rose-dim); opacity:.85; }
+  .tcal-snap-dot{ position:absolute; top:4px; right:4px; width:5px; height:5px; border-radius:50%; background:var(--accent); opacity:.9; }
+  .tcal-cell.has-snap{ cursor:pointer; }
+  .tcal-stat.span-wide{ grid-column:span 2; }
+  @media (min-width:560px){ .tcal-summary-bar.has-u{ grid-template-columns:repeat(5,1fr); } .tcal-stat.span-wide{ grid-column:auto; } }
+  .us-bar-track{ height:5px; border-radius:3px; background:var(--line); margin-top:7px; position:relative; overflow:hidden; }
+  .us-bar-fill{ position:absolute; top:0; bottom:0; border-radius:3px; }
+  .us-bar-fill.pos{ background:var(--teal); } .us-bar-fill.neg{ background:var(--rose); }
+  .us-break{ display:flex; gap:12px; flex-wrap:wrap; margin-top:5px; font-family:'IBM Plex Mono'; font-size:10.5px; color:var(--ink-faint); }
+  .us-break b{ font-weight:700; } .us-break .pos{ color:var(--teal-dim); } .us-break .neg{ color:var(--rose-dim); }
+  .pl-open-toggle{ margin-left:auto; }
+
   .tcal-week-total-val.neg{ color:var(--rose-dim); }
 
   .tcal-legend{ display:flex; align-items:center; gap:16px; margin-top:16px; font-size:11px; color:var(--ink-faint); flex-wrap:wrap; }
@@ -2830,6 +2844,17 @@
         <div class="td-card-sub" id="tdOpenAllocSub" style="margin-bottom:8px; display:block;"></div>
         <div id="tdOpenAllocList"></div>
       </div>
+      <div class="td-card" id="tdUnrealCard">
+        <div class="td-card-head" style="flex-wrap:wrap; gap:8px;">
+          <span>Unrealised P&amp;L History</span>
+          <div class="eq-range-toggle" id="tdUnrealToggle">
+            <button class="eq-range-btn on" data-ukind="week">Weekly</button>
+            <button class="eq-range-btn" data-ukind="month">Monthly</button>
+          </div>
+        </div>
+        <div class="td-card-sub" id="tdUnrealSub" style="margin-bottom:8px; display:block;"></div>
+        <div id="tdUnrealList"></div>
+      </div>
       <div class="td-card">
         <div class="td-card-head" style="flex-wrap:wrap; gap:8px;">
           <span>Equity Curve</span>
@@ -2965,13 +2990,13 @@
 </div></div>
 <div class="tr-group"><div class="tr-seg"><button class="tr-seg-btn on" data-g="g4" data-p="0">By stock · chart</button><button class="tr-seg-btn" data-g="g4" data-p="1">By stock · table</button></div><div class="tr-pane on" data-g="g4" data-p="0">
       <div class="td-card">
-        <div class="td-card-head"><span>By Stock · Realised vs Unrealised</span><span class="td-card-sub">tap a stock to open its chart</span></div>
+        <div class="td-card-head" style="flex-wrap:wrap; gap:8px;"><span>By Stock · Realised vs Unrealised</span><div class="eq-range-toggle pl-open-toggle"><button class="eq-range-btn on" data-plopen="0">All</button><button class="eq-range-btn" data-plopen="1">Open only</button></div></div><div class="td-card-sub" style="margin-bottom:6px; display:block;">tap a stock to open its chart</div>
         <div class="pl-legend"><span><i style="background:var(--teal)"></i>Realised (booked)</span><span><i style="background:var(--teal); opacity:.55"></i>Unrealised (open, hatched)</span></div>
         <div class="pl-stock-bars" id="plStockBars"></div>
       </div>
 </div><div class="tr-pane" data-g="g4" data-p="1">
       <div class="td-card">
-        <div class="td-card-head"><span>Stock-wise Breakdown</span><span class="td-card-sub" id="plTableSub"></span></div>
+        <div class="td-card-head" style="flex-wrap:wrap; gap:8px;"><span>Stock-wise Breakdown</span><span class="td-card-sub" id="plTableSub"></span><div class="eq-range-toggle pl-open-toggle"><button class="eq-range-btn on" data-plopen="0">All</button><button class="eq-range-btn" data-plopen="1">Open only</button></div></div>
         <div class="pl-table-wrap"><table class="pl-table" id="plTable"></table></div>
         <div id="plUnmapped"></div>
       </div>
@@ -6864,6 +6889,7 @@
       var sgn = t.direction==='short' ? -1 : 1;
       t.markPrice = q.ltp; t.markDate = todayKey(); t.unrealizedPnl = bkRound2((q.ltp-ep)*qty*sgn); t.liveMark = true;
     });
+    try{ recordUnrealSnapshot(); }catch(e){}
     if(Date.now()-bkLastPersist > 120000){ bkLastPersist = Date.now(); try{ localStorage.setItem(DB_KEY, JSON.stringify(db)); }catch(e){} }
   }
 
@@ -7645,11 +7671,113 @@
     });
   }
 
+  // =====================================================================
+  // UNREALISED P&L HISTORY — one snapshot per day (latest mark of that
+  // day wins), rolled up into weekly (Sun–Sat, same as the calendar) and
+  // monthly period-end values. Snapshots only exist from the day this
+  // feature first ran; earlier history can't be reconstructed.
+  // =====================================================================
+  var usnapLastSave = 0, usnapLastSig = '';
+  function usnapMarkDate(open){
+    if(open.some(function(t){ return t.liveMark; })) return todayKey();
+    var best = '';
+    open.forEach(function(t){ var d = String(t.markDate||''); if(/^\d{4}-\d{2}-\d{2}$/.test(d) && d>best) best = d; });
+    return best || todayKey();
+  }
+  function recordUnrealSnapshot(){
+    try{
+      var open = (db.trades||[]).filter(function(t){ return !t.exitDT; });
+      var vals = open.map(function(t){ return parseFloat(t.unrealizedPnl); }).filter(function(n){ return !isNaN(n); });
+      if(!db.unrealSnaps) db.unrealSnaps = {};
+      var hasPrev = Object.keys(db.unrealSnaps).length>0;
+      if(!vals.length && !(open.length===0 && hasPrev)) return;
+      var u = Math.round(vals.reduce(function(a,b){ return a+b; },0)*100)/100;
+      var cost = Math.round(open.reduce(function(sm,t){ var q=parseFloat(t.qty), ep=parseFloat(t.entryPrice); return sm+((q>0&&!isNaN(ep))?q*ep:0); },0));
+      var key = usnapMarkDate(open);
+      var sig = key+'|'+u+'|'+cost+'|'+open.length;
+      if(sig===usnapLastSig) return;
+      usnapLastSig = sig;
+      var prev = db.unrealSnaps[key];
+      if(prev && prev.u===u && prev.c===cost && prev.n===open.length) return;
+      db.unrealSnaps[key] = {u:u, c:cost, n:open.length};
+      if(!prev || Date.now()-usnapLastSave>300000){ usnapLastSave = Date.now(); saveDB(); }
+    }catch(e){}
+  }
+  function usnapAddDays(key, n){ var d = new Date(key+'T00:00:00'); d.setDate(d.getDate()+n); return todayKey(d); }
+  function usnapWeekStart(key){ var d = new Date(key+'T00:00:00'); d.setDate(d.getDate()-d.getDay()); return todayKey(d); }
+  function usnapSeries(kind){
+    var snaps = db.unrealSnaps||{}, keys = Object.keys(snaps).sort(), groups = [], idx = {};
+    keys.forEach(function(k){
+      var g = kind==='month' ? k.slice(0,7) : usnapWeekStart(k), sn = snaps[k];
+      if(idx[g]===undefined){ idx[g] = groups.length; groups.push({id:g, first:k, last:k, endU:sn.u, endC:sn.c, endN:sn.n, days:1}); }
+      else { var o = groups[idx[g]]; o.last = k; o.endU = sn.u; o.endC = sn.c; o.endN = sn.n; o.days++; }
+    });
+    var withPnl = (db.trades||[]).filter(function(t){ return tradeBasisDate(t) && t.pnl!==undefined && t.pnl!=='' && !isNaN(parseFloat(t.pnl)); });
+    groups.forEach(function(g, i){
+      var from = kind==='month' ? g.id+'-01' : g.id, to = kind==='month' ? g.id+'-31' : usnapAddDays(g.id, 6);
+      g.from = from; g.to = to;
+      g.real = withPnl.filter(function(t){ var bd = tradeBasisDate(t); return bd>=from && bd<=to; }).reduce(function(a,t){ return a+parseFloat(t.pnl); },0);
+      g.delta = i>0 ? g.endU-groups[i-1].endU : null;
+      g.net = g.delta!==null ? g.real+g.delta : null;
+      g.pct = g.endC ? g.endU/g.endC*100 : null;
+    });
+    return groups;
+  }
+  var usnapKind = 'week';
+  function renderUnrealTracker(){
+    var card = document.getElementById('tdUnrealCard'), list = document.getElementById('tdUnrealList'), sub = document.getElementById('tdUnrealSub');
+    if(!card || !list) return;
+    var series = usnapSeries(usnapKind);
+    if(!series.length){
+      if(sub) sub.textContent = '';
+      list.innerHTML = '<div class="td-empty-note">History starts saving automatically from today — open the app on trading days (or connect live prices) and weekly / monthly unrealised P&amp;L will build up here.</div>';
+      return;
+    }
+    var curId = usnapKind==='month' ? todayKey().slice(0,7) : usnapWeekStart(todayKey());
+    var rows = series.slice().reverse().slice(0,12);
+    var mx = Math.max.apply(null, rows.map(function(g){ return Math.abs(g.endU); }).concat([1]));
+    var fmtD = function(k){ return new Date(k+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric', month:'short'}); };
+    if(sub) sub.textContent = 'Period-end unrealised, plus what each '+usnapKind+' really earned: realised + change in unrealised.';
+    var cls = function(n){ return n>=0 ? 'pos' : 'neg'; };
+    list.innerHTML = '<div class="td-bd-list">' + rows.map(function(g){
+      var label = usnapKind==='month' ? monthLabelFromDateStr(g.id+'-01') : fmtD(g.id)+' – '+fmtD(usnapAddDays(g.id,6));
+      var isNow = g.id===curId;
+      var w = Math.min(100, Math.abs(g.endU)/mx*100);
+      var pctTxt = g.pct!==null ? ' · '+(g.pct>=0?'+':'')+g.pct.toFixed(1)+'% of open cost' : '';
+      var brk = '<span>Realised <b class="'+cls(g.real)+'">'+fmtPnl(Math.round(g.real))+'</b></span>' +
+        '<span>Δ Unrealised <b class="'+(g.delta===null?'':cls(g.delta))+'">'+(g.delta===null?'—':fmtPnl(Math.round(g.delta)))+'</b></span>' +
+        '<span>Net <b class="'+(g.net===null?'':cls(g.net))+'">'+(g.net===null?'—':fmtPnl(Math.round(g.net)))+'</b></span>';
+      return '<div class="td-bd-row"><div class="td-bd-top"><span class="td-bd-name">'+escapeHtml(label)+(isNow?' · live':'')+'</span><span class="td-bd-pnl '+cls(g.endU)+'">'+fmtPnl(Math.round(g.endU))+'</span></div>' +
+        '<div class="td-bd-meta">'+(isNow?'Latest':'As of '+fmtD(g.last))+' · '+g.endN+' open'+pctTxt+'</div>' +
+        '<div class="us-bar-track"><div class="us-bar-fill '+cls(g.endU)+'" style="left:0; width:'+w.toFixed(1)+'%;"></div></div>' +
+        '<div class="us-break">'+brk+'</div></div>';
+    }).join('') + '</div>';
+  }
+  var tdUnrealToggleEl = document.getElementById('tdUnrealToggle');
+  if(tdUnrealToggleEl){
+    tdUnrealToggleEl.addEventListener('click', function(e){
+      var b = e.target.closest('.eq-range-btn'); if(!b) return;
+      usnapKind = b.dataset.ukind;
+      tdUnrealToggleEl.querySelectorAll('.eq-range-btn').forEach(function(x){ x.classList.toggle('on', x===b); });
+      renderUnrealTracker();
+    });
+  }
+  // Time-weighted average capital tied up in open trades over the last N days.
+  function avgCapitalDeployed(trades, days){
+    var now = Date.now(), from = now-days*86400000, ev = capitalEventsTimeline(trades), running = 0, t = from, area = 0;
+    ev.forEach(function(e){ if(e.time<from) running += e.delta; });
+    ev.forEach(function(e){ if(e.time>=from && e.time<=now){ area += running*(e.time-t); running += e.delta; t = e.time; } });
+    area += running*(now-t);
+    return Math.max(0, area/(now-from));
+  }
+
   function renderTradeOverview(){
     const grid = document.getElementById('tdOverviewStats');
     if(!grid) return;
     const trades = db.trades||[];
     const m = computeTradeMetrics(trades);
+    recordUnrealSnapshot();
+    renderUnrealTracker();
 
     // ---- Groww-style hero card: big net P&L + today/week/capital-deployed row ----
     const heroEl = document.getElementById('tdHeroCard');
@@ -7665,12 +7793,7 @@
       // sum of every position ever sized (which would double-count capital that was freed
       // up and redeployed into later trades).
       const capitalDeployed = trades.filter(t=> tradeOutcome(t)==='open').reduce((s,t)=>{ const n=parseFloat(t.posSize); return s+(isNaN(n)?0:n); },0);
-      // Peak can never be legitimately lower than what's deployed right now —
-      // "right now" is itself a point in that same history. If the timeline
-      // walk (which skips trades with an unparseable entry date) comes out
-      // lower than the live sum, the live sum IS the true peak; this max()
-      // guarantees the two stats can never contradict each other on screen.
-      const allTimeCap = Math.max(maxCapitalDeployed(trades, null, null), capitalDeployed);
+      const avgDeployed30 = avgCapitalDeployed(trades, 30);
       const heroUnreal = trades.filter(t=> !t.exitDT).reduce((s,t)=>{ const u=parseFloat(t.unrealizedPnl); return isNaN(u)?s:s+u; }, 0);
       const heroHasUnreal = trades.some(t=> !t.exitDT && !isNaN(parseFloat(t.unrealizedPnl)));
       heroEl.className = 'td-hero-card' + (trades.length ? (m.net>=0?' pos':' neg') : '');
@@ -7682,7 +7805,8 @@
           <div class="td-hero-stat"><div class="td-hero-stat-lbl">Last 7 Days</div><div class="td-hero-stat-val ${weekPnl>=0?'pos':'neg'}">${fmtPnl(Math.round(weekPnl))}</div></div>
           <div class="td-hero-stat"><div class="td-hero-stat-lbl">Unrealised${liveQuotesCount()?' · live':''}</div><div class="td-hero-stat-val ${heroUnreal>=0?'pos':'neg'}">${heroHasUnreal?fmtPnl(Math.round(heroUnreal)):'—'}</div></div>
           <div class="td-hero-stat"><div class="td-hero-stat-lbl">Capital Deployed Right Now</div><div class="td-hero-stat-val">${capitalDeployed?fmtCapitalStat(capitalDeployed):'—'}</div></div>
-          <div class="td-hero-stat"><div class="td-hero-stat-lbl">Peak Capital Deployed</div><div class="td-hero-stat-val">${allTimeCap?fmtCapitalStat(allTimeCap):'—'}</div></div>
+          <div class="td-hero-stat"><div class="td-hero-stat-lbl">Total P&amp;L · incl. unrealised</div><div class="td-hero-stat-val ${(m.net+heroUnreal)>=0?'pos':'neg'}">${heroHasUnreal?fmtPnl(Math.round(m.net+heroUnreal)):fmtPnl(Math.round(m.net))}</div></div>
+          <div class="td-hero-stat"><div class="td-hero-stat-lbl">Avg Capital Used · 30D</div><div class="td-hero-stat-val">${avgDeployed30>0?fmtCapitalStat(avgDeployed30):'—'}</div></div>
         </div>`;
     }
 
@@ -8000,6 +8124,11 @@
         monthTrades += dayTrades.length;
       }
     }
+    // unrealised snapshots for this month
+    const snaps = db.unrealSnaps || {};
+    const mPrefix = y+'-'+String(mo+1).padStart(2,'0')+'-';
+    const monthSnapKeys = Object.keys(snaps).filter(k=>k.startsWith(mPrefix)).sort();
+    const monthEndSnap = monthSnapKeys.length ? snaps[monthSnapKeys[monthSnapKeys.length-1]] : null;
     const tradedDays = winDays+lossDays;
     const winRate = tradedDays ? Math.round((winDays/tradedDays)*100) : null;
 
@@ -8022,7 +8151,12 @@
         <div class="tcal-stat">
           <div class="tcal-stat-lbl">Trades logged</div>
           <div class="tcal-stat-val">${monthTrades||'—'}</div>
+        </div>
+        <div class="tcal-stat span-wide ${monthEndSnap?(monthEndSnap.u>=0?'pos':'neg'):''}">
+          <div class="tcal-stat-lbl">Unrealised ${mo===new Date().getMonth()&&y===new Date().getFullYear()?'(latest)':'(month-end)'}</div>
+          <div class="tcal-stat-val ${monthEndSnap?(monthEndSnap.u>=0?'pos':'neg'):''}">${monthEndSnap?fmtPnl(Math.round(monthEndSnap.u)):'—'}</div>
         </div>`;
+      summaryEl.classList.add('has-u');
     }
 
     // ---- Pass 2: build week rows (7 day cells + 1 week-total cell each) ----
@@ -8037,7 +8171,8 @@
     let html = '';
     for(let w=0; w<cells.length; w+=7){
       const week = cells.slice(w, w+7);
-      let weekTotal = 0, weekHasPnl = false;
+      let weekTotal = 0, weekHasPnl = false, weekSnap = null;
+      week.forEach(c=>{ if(!c.empty && snaps[c.key]) weekSnap = snaps[c.key]; });
       html += '<div class="tcal-week-row">';
       week.forEach(c=>{
         if(c.empty){ html += '<div class="tcal-cell empty"></div>'; return; }
@@ -8056,19 +8191,22 @@
             cls += ' flat';
           }
         }
+        const daySnap = snaps[c.key];
+        if(daySnap) cls += ' has-snap';
         if(c.key===todayKeyStr) cls += ' is-today';
         if(c.key===tcalSelectedKey) cls += ' is-selected';
         html += `<div class="${cls}" data-daykey="${c.key}"${styleAttr}>
+          ${daySnap?`<span class="tcal-snap-dot" title="Unrealised ${fmtCompactPnl(daySnap.u)}"></span>`:''}
           <div class="tcal-day-num">${c.d}</div>
           ${stat.hasPnl?`<div class="tcal-pnl-tag">${fmtPnl(Math.round(stat.pnl))}</div><div class="tcal-trade-count">${stat.count} trade${stat.count===1?'':'s'}</div>`:(stat.count?`<div class="tcal-pnl-tag" style="color:var(--ink-faint);">${stat.count}T</div>`:'')}
         </div>`;
       });
       const wtCls = weekHasPnl ? (weekTotal>=0?'pos':'neg') : '';
-      html += `<div class="tcal-week-total"><div class="tcal-week-total-lbl">Wk</div><div class="tcal-week-total-val ${wtCls}">${weekHasPnl?fmtPnl(Math.round(weekTotal)):'—'}</div></div>`;
+      html += `<div class="tcal-week-total"><div class="tcal-week-total-lbl">Wk</div><div class="tcal-week-total-val ${wtCls}">${weekHasPnl?fmtPnl(Math.round(weekTotal)):'—'}</div>${weekSnap?`<div class="tcal-week-u ${weekSnap.u>=0?'pos':'neg'}" title="Unrealised at week end">U ${fmtCompactPnl(weekSnap.u)}</div>`:''}</div>`;
       html += '</div>';
     }
     gridEl.innerHTML = html;
-    gridEl.querySelectorAll('.tcal-cell.has-trades').forEach(cell=>{
+    gridEl.querySelectorAll('.tcal-cell.has-trades, .tcal-cell.has-snap').forEach(cell=>{
       cell.addEventListener('click', ()=>{
         const key = cell.dataset.daykey;
         tcalSelectedKey = (tcalSelectedKey===key) ? null : key;
@@ -8086,7 +8224,14 @@
     const dayTotal = withPnl.reduce((s,t)=>s+parseFloat(t.pnl),0);
     const totalCls = withPnl.length ? (dayTotal>=0?'pos':'neg') : '';
     const dateLabel = new Date(tcalSelectedKey+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short', day:'numeric', month:'short', year:'numeric'});
-    el.innerHTML = `<div class="tcal-selected-label"><span>${dateLabel} · ${dayTrades.length} trade${dayTrades.length===1?'':'s'}</span>${withPnl.length?`<span class="tcal-selected-total ${totalCls}">${fmtPnl(Math.round(dayTotal))}</span>`:''}</div>` + dayTrades.map(t=>{
+    const _snaps = db.unrealSnaps || {}, _sk = Object.keys(_snaps).sort();
+    let snapHtml = '';
+    if(_snaps[tcalSelectedKey]){
+      const sn = _snaps[tcalSelectedKey], pi = _sk.indexOf(tcalSelectedKey)-1;
+      const dlt = pi>=0 ? sn.u-_snaps[_sk[pi]].u : null;
+      snapHtml = `<div class="td-bd-row"><div class="td-bd-top"><span class="td-bd-name">Unrealised snapshot</span><span class="trade-pnl ${sn.u>=0?'pos':'neg'}">${fmtPnl(Math.round(sn.u))}</span></div><div class="td-bd-meta">${sn.n} open position${sn.n===1?'':'s'}${dlt!==null?' · '+(dlt>=0?'+':'−')+fmtCompactPnl(Math.abs(dlt)).replace(/^[+-]/,'')+' vs previous snapshot':''}</div></div>`;
+    }
+    el.innerHTML = snapHtml + `<div class="tcal-selected-label"><span>${dateLabel} · ${dayTrades.length} trade${dayTrades.length===1?'':'s'}</span>${withPnl.length?`<span class="tcal-selected-total ${totalCls}">${fmtPnl(Math.round(dayTotal))}</span>`:''}</div>` + dayTrades.map(t=>{
       const n = parseFloat(t.pnl);
       const cls = isNaN(n)?'':(n>=0?'pos':'neg');
       const dirTag = t.direction==='short'?'Short':'Long';
@@ -12023,10 +12168,17 @@
     svgEl.addEventListener('pointermove', move); svgEl.addEventListener('pointerleave', leave);
   }
 
+  var plOpenOnly = false;
+  document.addEventListener('click', function(e){
+    var b = e.target.closest && e.target.closest('[data-plopen]'); if(!b) return;
+    plOpenOnly = b.getAttribute('data-plopen')==='1';
+    document.querySelectorAll('[data-plopen]').forEach(function(x){ x.classList.toggle('on', (x.getAttribute('data-plopen')==='1')===plOpenOnly); });
+    try{ renderPnlPanel(); }catch(err){}
+  });
   function plRenderStockBars(c){
     var el = bkEl('plStockBars'); if(!el) return;
-    var rows = c.rows.filter(function(r){ return r.realised || r.unreal; }).sort(function(a,b){ return Math.abs(b.total)-Math.abs(a.total); }).slice(0,14);
-    if(!rows.length){ el.innerHTML = '<div class="td-empty-note">Nothing to show for this period.</div>'; return; }
+    var rows = c.rows.filter(function(r){ return (r.realised || r.unreal) && (!plOpenOnly || r.qty!==0); }).sort(function(a,b){ return Math.abs(b.total)-Math.abs(a.total); }).slice(0,14);
+    if(!rows.length){ el.innerHTML = '<div class="td-empty-note">'+(plOpenOnly?'No open positions right now.':'Nothing to show for this period.')+'</div>'; return; }
     var mx = Math.max.apply(null, rows.map(function(r){ return Math.max(Math.abs(r.realised), Math.abs(r.unreal||0)); })) || 1;
     el.innerHTML = rows.map(function(r){
       var seg = function(v, cls){
@@ -12042,8 +12194,11 @@
   function plRenderTable(c){
     var tbl = bkEl('plTable'), sub = bkEl('plTableSub'); if(!tbl) return;
     var rows = c.rows.slice().sort(function(a,b){ return Math.abs(b.total)-Math.abs(a.total); });
-    if(!rows.length){ tbl.innerHTML = '<tr><td style="text-align:left; color:var(--ink-faint); padding:24px 0;">No trades yet.</td></tr>'; return; }
-    if(sub) sub.textContent = rows.length+' stock'+(rows.length===1?'':'s');
+    if(plOpenOnly) rows = rows.filter(function(r){ return r.qty!==0; }).sort(function(a,b){ return (b.value||b.cost||0)-(a.value||a.cost||0); });
+    if(!rows.length){ tbl.innerHTML = '<tr><td style="text-align:left; color:var(--ink-faint); padding:24px 0;">'+(plOpenOnly?'No open positions right now.':'No trades yet.')+'</td></tr>'; if(sub) sub.textContent = plOpenOnly?'0 open':''; return; }
+    if(sub) sub.textContent = rows.length+(plOpenOnly?' open position':' stock')+(rows.length===1?'':'s');
+    var totReal = plOpenOnly ? rows.reduce(function(a,r){ return a+(r.realised||0); },0) : c.R.realised;
+    var totAll = plOpenOnly ? rows.reduce(function(a,r){ return a+(r.total||0); },0) : c.total;
     var th = '<tr><th>Stock</th><th>Qty</th><th>Avg buy</th><th>LTP</th><th>Day</th><th>Invested</th><th>Value</th><th>Unrealised</th><th>Realised</th><th>Total</th></tr>';
     var body = rows.map(function(r){
       var open = r.qty!==0;
@@ -12057,7 +12212,7 @@
         '<td class="'+bkSignCls(r.realised)+'">'+(r.realisedCount ? plMoney(r.realised) : '—')+'</td>' +
         '<td class="'+bkSignCls(r.total)+'" style="font-weight:800;">'+plMoney(r.total)+'</td></tr>';
     }).join('');
-    var tot = '<tr><td><span class="sym">Total</span></td><td></td><td></td><td></td><td class="'+bkSignCls(c.U.dayKnown?c.U.dayPnl:null)+'">'+(c.U.dayKnown?plMoney(c.U.dayPnl):'—')+'</td><td>'+(c.U.open?fmtMoney(c.U.cost):'—')+'</td><td>'+(c.U.withPrice?fmtMoney(c.U.value):'—')+'</td><td class="'+bkSignCls(c.U.unreal)+'" style="font-weight:800;">'+(c.U.withPrice?plMoney(c.U.unreal):'—')+'</td><td class="'+bkSignCls(c.R.realised)+'" style="font-weight:800;">'+plMoney(c.R.realised)+'</td><td class="'+bkSignCls(c.total)+'" style="font-weight:800;">'+plMoney(c.total)+'</td></tr>';
+    var tot = '<tr><td><span class="sym">Total</span></td><td></td><td></td><td></td><td class="'+bkSignCls(c.U.dayKnown?c.U.dayPnl:null)+'">'+(c.U.dayKnown?plMoney(c.U.dayPnl):'—')+'</td><td>'+(c.U.open?fmtMoney(c.U.cost):'—')+'</td><td>'+(c.U.withPrice?fmtMoney(c.U.value):'—')+'</td><td class="'+bkSignCls(c.U.unreal)+'" style="font-weight:800;">'+(c.U.withPrice?plMoney(c.U.unreal):'—')+'</td><td class="'+bkSignCls(totReal)+'" style="font-weight:800;">'+plMoney(totReal)+'</td><td class="'+bkSignCls(totAll)+'" style="font-weight:800;">'+plMoney(totAll)+'</td></tr>';
     // flash cells whose price moved since the last tick
     var prev = {}; tbl.querySelectorAll('td[data-ltp]').forEach(function(td){ prev[td.getAttribute('data-ltp')] = td.textContent; });
     tbl.innerHTML = th+body+tot;
