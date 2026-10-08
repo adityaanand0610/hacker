@@ -1449,7 +1449,28 @@
   .us-bar-fill.pos{ background:var(--teal); } .us-bar-fill.neg{ background:var(--rose); }
   .us-break{ display:flex; gap:12px; flex-wrap:wrap; margin-top:5px; font-family:'IBM Plex Mono'; font-size:10.5px; color:var(--ink-faint); }
   .us-break b{ font-weight:700; } .us-break .pos{ color:var(--teal-dim); } .us-break .neg{ color:var(--rose-dim); }
-  .pl-open-toggle{ margin-left:auto; }
+
+  /* ---- Portfolio tab (Groww-style positions) ---- */
+  .pf-summary{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-md); padding:18px 18px 16px; margin-bottom:14px; }
+  .pf-cur-lbl{ font-size:11px; color:var(--ink-faint); font-weight:600; }
+  .pf-cur-val{ font-family:'IBM Plex Mono'; font-size:28px; font-weight:700; margin-top:4px; letter-spacing:-0.01em; }
+  .pf-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:16px; padding-top:14px; border-top:1px dashed var(--line); }
+  .pf-k{ font-size:10.5px; color:var(--ink-faint); font-weight:600; }
+  .pf-v{ font-family:'IBM Plex Mono'; font-size:14.5px; font-weight:700; margin-top:3px; }
+  .pf-s{ font-family:'IBM Plex Mono'; font-size:11px; margin-top:2px; color:var(--ink-faint); font-weight:600; }
+  .pf-v.pos,.pf-s.pos,.pf-ret.pos,.pf-sub .pos{ color:#26A69A; } .pf-v.neg,.pf-s.neg,.pf-ret.neg,.pf-sub .neg{ color:#EF5350; }
+  .pf-listhead{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin:6px 2px 10px; flex-wrap:wrap; }
+  .pf-title{ font-weight:800; font-size:15px; } .pf-title span{ color:var(--ink-faint); font-weight:600; }
+  .pf-list{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-md); overflow:hidden; }
+  .pf-row{ display:flex; justify-content:space-between; gap:14px; padding:14px 18px; border-bottom:1px solid var(--line); cursor:pointer; transition:background .12s; }
+  .pf-row:last-child{ border-bottom:none; } .pf-row:hover{ background:var(--surface-raised); }
+  .pf-l{ min-width:0; } .pf-r{ text-align:right; flex-shrink:0; }
+  .pf-name{ font-weight:800; font-size:14px; letter-spacing:.01em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pf-tag{ font-size:9px; font-weight:800; padding:2px 6px; border-radius:6px; background:var(--surface-raised); color:var(--ink-dim); vertical-align:middle; margin-left:4px; }
+  .pf-sub{ font-family:'IBM Plex Mono'; font-size:11.5px; color:var(--ink-dim); margin-top:3px; font-weight:600; }
+  .pf-faint{ color:var(--ink-faint); font-size:10.5px; font-weight:500; }
+  .pf-ret{ font-family:'IBM Plex Mono'; font-size:14px; font-weight:800; } .pf-pct{ font-size:11.5px; font-weight:700; }
+  @media (max-width:480px){ .pf-cur-val{ font-size:24px; } .pf-v{ font-size:13px; } .pf-row{ padding:12px 14px; } }
 
   .tcal-week-total-val.neg{ color:var(--rose-dim); }
 
@@ -2824,6 +2845,7 @@
     <div class="trade-subnav-row">
       <div class="trade-subnav" id="tradeSubnav">
         <button class="trade-subnav-btn active" data-tpanel="overview">Overview</button>
+        <button class="trade-subnav-btn" data-tpanel="portfolio">Portfolio</button>
         <button class="trade-subnav-btn" data-tpanel="pnl">P&amp;L</button>
         <button class="trade-subnav-btn" data-tpanel="chart">Chart</button>
         <button class="trade-subnav-btn" data-tpanel="history">Trades</button>
@@ -2960,6 +2982,22 @@
 </div></div>
 </div>
 
+<div class="trade-panel" id="tpanel-portfolio">
+      <div class="bk-live-row">
+        <span class="bk-live-badge" id="pfLiveBadge"><span class="bk-dot"></span><span class="bk-live-text">Live prices: not set up</span></span>
+      </div>
+      <div class="pf-summary" id="pfSummary"></div>
+      <div class="pf-listhead">
+        <div class="pf-title">Positions <span id="pfCount"></span></div>
+        <div class="eq-range-toggle" id="pfSort">
+          <button class="eq-range-btn on" data-pfs="value">Value</button>
+          <button class="eq-range-btn" data-pfs="returns">Returns</button>
+          <button class="eq-range-btn" data-pfs="day">1D</button>
+        </div>
+      </div>
+      <div class="pf-list" id="pfList"></div>
+    </div>
+
 <div class="trade-panel" id="tpanel-pnl">
       <div class="bk-live-row">
         <span class="bk-live-badge" id="plLiveBadge"><span class="bk-dot"></span><span class="bk-live-text">Live prices: not set up</span></span>
@@ -2990,13 +3028,13 @@
 </div></div>
 <div class="tr-group"><div class="tr-seg"><button class="tr-seg-btn on" data-g="g4" data-p="0">By stock · chart</button><button class="tr-seg-btn" data-g="g4" data-p="1">By stock · table</button></div><div class="tr-pane on" data-g="g4" data-p="0">
       <div class="td-card">
-        <div class="td-card-head" style="flex-wrap:wrap; gap:8px;"><span>By Stock · Realised vs Unrealised</span><div class="eq-range-toggle pl-open-toggle"><button class="eq-range-btn on" data-plopen="0">All</button><button class="eq-range-btn" data-plopen="1">Open only</button></div></div><div class="td-card-sub" style="margin-bottom:6px; display:block;">tap a stock to open its chart</div>
+        <div class="td-card-head" style="flex-wrap:wrap; gap:8px;"><span>By Stock · Realised vs Unrealised</span></div><div class="td-card-sub" style="margin-bottom:6px; display:block;">tap a stock to open its chart</div>
         <div class="pl-legend"><span><i style="background:var(--teal)"></i>Realised (booked)</span><span><i style="background:var(--teal); opacity:.55"></i>Unrealised (open, hatched)</span></div>
         <div class="pl-stock-bars" id="plStockBars"></div>
       </div>
 </div><div class="tr-pane" data-g="g4" data-p="1">
       <div class="td-card">
-        <div class="td-card-head" style="flex-wrap:wrap; gap:8px;"><span>Stock-wise Breakdown</span><span class="td-card-sub" id="plTableSub"></span><div class="eq-range-toggle pl-open-toggle"><button class="eq-range-btn on" data-plopen="0">All</button><button class="eq-range-btn" data-plopen="1">Open only</button></div></div>
+        <div class="td-card-head" style="flex-wrap:wrap; gap:8px;"><span>Stock-wise Breakdown</span><span class="td-card-sub" id="plTableSub"></span></div>
         <div class="pl-table-wrap"><table class="pl-table" id="plTable"></table></div>
         <div id="plUnmapped"></div>
       </div>
@@ -3026,6 +3064,10 @@
           <button class="eq-range-btn" data-rg="1y">1Y</button>
           <button class="eq-range-btn" data-rg="3y">3Y</button>
         </div>
+        <span class="tc-lbl">Type</span><div class="eq-range-toggle tc-chips" id="tcType">
+          <button class="eq-range-btn on" data-ty="candle">Candles</button>
+          <button class="eq-range-btn" data-ty="line">Line</button>
+        </div>
       </div>
       <div id="tcBanner"></div>
       <div class="tc-summary" id="tcSummary"></div>
@@ -3035,7 +3077,7 @@
         <div class="tc-tip" id="tcTip"></div>
         <div class="tc-msg" id="tcMsg" style="display:none;"></div>
       </div>
-      <div class="tc-legend"><span><svg width="12" height="16"><line x1="6" x2="6" y1="1" y2="15" stroke="var(--teal)"/><rect x="2" y="4" width="8" height="8" fill="var(--teal)"/></svg>Price up</span><span><svg width="12" height="16"><line x1="6" x2="6" y1="1" y2="15" stroke="var(--rose)"/><rect x="2" y="4" width="8" height="8" fill="var(--rose)"/></svg>Price down</span><span><svg width="16" height="16"><circle cx="8" cy="8" r="7.5" fill="#2F7BFF"/><text x="8" y="11.6" text-anchor="middle" font-size="10" font-weight="800" fill="#fff" font-family="Inter">B</text></svg>Your buy</span><span><svg width="16" height="16"><circle cx="8" cy="8" r="7.5" fill="#F08A24"/><text x="8" y="11.6" text-anchor="middle" font-size="10" font-weight="800" fill="#fff" font-family="Inter">S</text></svg>Your sell</span><span><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--teal)" stroke-dasharray="4,3" stroke-width="1.6"/></svg>Winning trade</span><span><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--rose)" stroke-dasharray="4,3" stroke-width="1.6"/></svg>Losing trade</span><span><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--accent)"  stroke-width="1.6"/></svg>Avg cost</span><span style="color:var(--ink-faint);">Drag to pan · pinch or Ctrl/⌘+scroll to zoom · hover for O/H/L/C</span></div>
+      <div class="tc-legend"><span><svg width="12" height="16"><line x1="6" x2="6" y1="1" y2="15" stroke="#26A69A"/><rect x="2" y="4" width="8" height="8" fill="#26A69A"/></svg>Price up</span><span><svg width="12" height="16"><line x1="6" x2="6" y1="1" y2="15" stroke="#EF5350"/><rect x="2" y="4" width="8" height="8" fill="#EF5350"/></svg>Price down</span><span><svg width="16" height="16"><circle cx="8" cy="8" r="7.5" fill="#2F7BFF"/><text x="8" y="11.6" text-anchor="middle" font-size="10" font-weight="800" fill="#fff" font-family="Inter">B</text></svg>Your buy</span><span><svg width="16" height="16"><circle cx="8" cy="8" r="7.5" fill="#F08A24"/><text x="8" y="11.6" text-anchor="middle" font-size="10" font-weight="800" fill="#fff" font-family="Inter">S</text></svg>Your sell</span><span><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--teal)" stroke-dasharray="4,3" stroke-width="1.6"/></svg>Winning trade</span><span><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--rose)" stroke-dasharray="4,3" stroke-width="1.6"/></svg>Losing trade</span><span><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="var(--accent)"  stroke-width="1.6"/></svg>Avg cost</span><span style="color:var(--ink-faint);">Drag to pan · pinch or Ctrl/⌘+scroll to zoom · hover for O/H/L/C</span></div>
       <div class="td-card" style="margin-top:14px;">
         <div class="td-card-head"><span>Trades in this stock</span><span class="td-card-sub">tap a row to jump to it on the chart</span></div>
         <div class="pl-table-wrap"><table class="pl-table" id="tcTrades"></table></div>
@@ -6907,7 +6949,7 @@
     else if(s.status==='ok'){ if(bkMarketOpen()){ txt = 'LIVE · '+srcName+' · '+hhmm; cls = 'live'; } else { txt = 'Market closed · last price · '+srcName+' · '+hhmm; cls = 'stale'; } }
     else if(s.status==='idle'){ txt = s.msg || 'No open positions to price'; }
     else { txt = 'Live prices off'; }
-    ['plLiveBadge','tcLiveBadge'].forEach(function(id){
+    ['plLiveBadge','tcLiveBadge','pfLiveBadge'].forEach(function(id){
       var el = bkEl(id); if(!el) return;
       el.className = 'bk-live-badge '+cls; el.querySelector('.bk-live-text').textContent = txt; el.title = s.msg || '';
     });
@@ -6951,6 +6993,7 @@
   function bkLiveDependents(){
     try{ if(bkPanelActive('pnl')) renderPnlPanel(true); }catch(e){ console.warn(e); }
     try{ if(bkPanelActive('chart')) tcOnLiveTick(); }catch(e){ console.warn(e); }
+    try{ if(bkPanelActive('portfolio')) renderPortfolio(); }catch(e){ console.warn(e); }
     try{ if(bkPanelActive('overview')) renderTradeOverview(); }catch(e){ console.warn(e); }
   }
   function bkStartLoop(){
@@ -6970,11 +7013,11 @@
   // range" so ₹ P&L and an index level can share one axis. Results are cached
   // on-device for 12 h; if a refresh fails the stale cache is used.
   var BENCHMARK_TICKERS = {
-    nifty50:     { symbols: ['NSE:NIFTY 50'], label: 'Nifty 50', color: '#4A7FB5' },
-    midcap100:   { symbols: ['NSE:NIFTY MIDCAP 100'], label: 'Nifty Midcap 100', color: 'var(--teal)' },
-    smallcap250: { symbols: ['NSE:NIFTY SMLCAP 250', 'NSE:NIFTY SMALLCAP 250'], label: 'Nifty Smallcap 250', color: 'var(--rose)' }
+    nifty50:     { symbols: ['NSE:NIFTY 50', 'NSE:NIFTY'], label: 'Nifty 50', color: '#4A7FB5' },
+    midcap100:   { symbols: ['NSE:NIFTY MIDCAP 100', 'NSE:NIFTYMIDCAP100', 'NSE:NIFTY MIDCAP100', 'NSE:MOM100'], label: 'Nifty Midcap 100', color: 'var(--teal)' },
+    smallcap250: { symbols: ['NSE:NIFTY SMLCAP 250', 'NSE:NIFTY SMALLCAP 250', 'NSE:NIFTYSMLCAP250', 'NSE:NIFTYSMALLCAP250', 'NSE:HDFCSML250'], label: 'Nifty Smallcap 250', color: 'var(--rose)' }
   };
-  const BENCHMARK_CACHE_KEY = 'fv_benchmark_cache_v3';
+  const BENCHMARK_CACHE_KEY = 'fv_benchmark_cache_v4';
   const BENCHMARK_CACHE_TTL = 12*60*60*1000;
   let benchmarkMemCache = {};
   let benchmarkVisible = { nifty50: true, midcap100: true, smallcap250: true };
@@ -7001,7 +7044,7 @@
         return points;
       }catch(err){ lastErr = err; console.warn('Benchmark fetch failed for', key, symbol, err.message); if(err.code==='no_proxy' || err.code==='kite_login') break; }
     }
-    if(!attempt && lastErr && lastErr.code!=='no_proxy' && lastErr.code!=='kite_login'){ await new Promise(function(r){ setTimeout(r,1500); }); return fetchBenchmarkSeries(key, 1); }
+    if(!attempt && lastErr && (lastErr.code==='timeout' || lastErr.code==='network')){ await new Promise(function(r){ setTimeout(r,1500); }); return fetchBenchmarkSeries(key, 1); }
     return cached ? cached.points : null;
   }
 
@@ -7202,7 +7245,8 @@
         seriesList[placeholderIdx] = { key, label: cfg.label+(bkReady()?' (unavailable)':' (connect a broker)'), color: cfg.color, points: [], visible:false };
       } else {
         const rebased = rebaseToPercent(data, p=>p.date, p=>p.close, fromKey, toKey);
-        seriesList[placeholderIdx] = { key, label: cfg.label, color: cfg.color, points: rebased, visible: true };
+        const usedSym = (loadBenchmarkDiskCache()[key]||{}).symbol || '';
+        seriesList[placeholderIdx] = { key, label: cfg.label+(/MOM100|HDFCSML250/.test(usedSym) ? ' (via ETF)' : ''), color: cfg.color, points: rebased, visible: true };
       }
       draw();
     }
@@ -12168,17 +12212,69 @@
     svgEl.addEventListener('pointermove', move); svgEl.addEventListener('pointerleave', leave);
   }
 
-  var plOpenOnly = false;
-  document.addEventListener('click', function(e){
-    var b = e.target.closest && e.target.closest('[data-plopen]'); if(!b) return;
-    plOpenOnly = b.getAttribute('data-plopen')==='1';
-    document.querySelectorAll('[data-plopen]').forEach(function(x){ x.classList.toggle('on', (x.getAttribute('data-plopen')==='1')===plOpenOnly); });
-    try{ renderPnlPanel(); }catch(err){}
-  });
+  // =====================================================================
+  // PORTFOLIO — open positions only, laid out like Groww's Positions tab.
+  // No realised P&L here by design; that lives in the P&L tab.
+  // =====================================================================
+  var pfSortKey = 'value';
+  function pfCurrent(r){ return r.unreal!==null ? r.cost + r.unreal : (r.value!==null ? r.value : r.cost); }
+  function renderPortfolio(){
+    var sumEl = bkEl('pfSummary'), listEl = bkEl('pfList'), cnt = bkEl('pfCount'); if(!sumEl || !listEl) return;
+    var rows = bkOpenRows();
+    if(cnt) cnt.textContent = rows.length ? '· '+rows.length : '';
+    if(!rows.length){
+      sumEl.innerHTML = '';
+      listEl.innerHTML = '<div class="td-empty-note" style="padding:28px 8px;">No open positions right now.</div>';
+      return;
+    }
+    var invested = 0, current = 0, unreal = 0, day = 0, dayBase = 0, hasDay = false;
+    rows.forEach(function(r){
+      var cur = pfCurrent(r);
+      invested += r.cost; current += cur; unreal += (r.unreal||0);
+      if(r.dayPnl!==null && r.dayPnl!==undefined){ hasDay = true; day += r.dayPnl; dayBase += cur - r.dayPnl; }
+    });
+    var totPct = invested ? unreal/invested*100 : null, dayPct = (hasDay && dayBase) ? day/dayBase*100 : null;
+    var sg = function(n){ return n===null||n===undefined||isNaN(n) ? '' : (n>=0?'pos':'neg'); };
+    sumEl.innerHTML =
+      '<div class="pf-cur-lbl">Current value</div>' +
+      '<div class="pf-cur-val">'+fmtMoney(current)+'</div>' +
+      '<div class="pf-grid">' +
+        '<div><div class="pf-k">Total returns</div><div class="pf-v '+sg(unreal)+'">'+plMoney(unreal)+'</div><div class="pf-s '+sg(totPct)+'">'+bkPct(totPct)+'</div></div>' +
+        '<div><div class="pf-k">1D returns</div><div class="pf-v '+(hasDay?sg(day):'')+'">'+(hasDay?plMoney(day):'—')+'</div><div class="pf-s '+sg(dayPct)+'">'+(hasDay?bkPct(dayPct):'live prices needed')+'</div></div>' +
+        '<div><div class="pf-k">Invested</div><div class="pf-v">'+fmtMoney(invested)+'</div><div class="pf-s">'+rows.length+' position'+(rows.length===1?'':'s')+'</div></div>' +
+      '</div>';
+    var keyFn = {
+      value: function(r){ return pfCurrent(r); },
+      returns: function(r){ return r.unrealPct===null ? -1e9 : r.unrealPct; },
+      day: function(r){ return r.dayPct===null||r.dayPct===undefined ? -1e9 : r.dayPct; }
+    }[pfSortKey] || function(r){ return pfCurrent(r); };
+    rows = rows.slice().sort(function(a,b){ return keyFn(b)-keyFn(a); });
+    listEl.innerHTML = rows.map(function(r){
+      var cur = pfCurrent(r), hasPx = r.ltp!==null;
+      return '<div class="pf-row" data-chart-ticker="'+escapeHtml(r.ticker)+'">' +
+        '<div class="pf-l"><div class="pf-name">'+escapeHtml(r.ticker)+(r.dir==='short'?' <span class="pf-tag">SHORT</span>':'')+'</div>' +
+          '<div class="pf-sub">'+Math.abs(r.qty)+' share'+(Math.abs(r.qty)===1?'':'s')+' · Avg '+bkPx(r.avg)+'</div>' +
+          '<div class="pf-sub pf-faint">Invested '+fmtMoney(r.cost)+' → '+fmtMoney(cur)+'</div></div>' +
+        '<div class="pf-r"><div class="pf-ret '+sg(r.unreal)+'">'+(r.unreal!==null ? plMoney(r.unreal) : '—')+(r.unrealPct!==null ? ' <span class="pf-pct">('+bkPct(r.unrealPct)+')</span>' : '')+'</div>' +
+          '<div class="pf-sub">LTP '+(hasPx?bkPx(r.ltp):'—')+(r.dayPct!==null && r.dayPct!==undefined ? ' <span class="'+sg(r.dayPct)+'">('+bkPct(r.dayPct)+')</span>' : '')+'</div>' +
+          '<div class="pf-sub pf-faint">'+(r.live?'live':(hasPx?'last known':'no price'))+'</div></div>' +
+        '</div>';
+    }).join('');
+  }
+  (function(){
+    var sortEl = document.getElementById('pfSort');
+    if(sortEl) sortEl.addEventListener('click', function(e){
+      var b = e.target.closest('[data-pfs]'); if(!b) return;
+      pfSortKey = b.dataset.pfs;
+      sortEl.querySelectorAll('.eq-range-btn').forEach(function(x){ x.classList.toggle('on', x===b); });
+      renderPortfolio();
+    });
+  })();
+
   function plRenderStockBars(c){
     var el = bkEl('plStockBars'); if(!el) return;
-    var rows = c.rows.filter(function(r){ return (r.realised || r.unreal) && (!plOpenOnly || r.qty!==0); }).sort(function(a,b){ return Math.abs(b.total)-Math.abs(a.total); }).slice(0,14);
-    if(!rows.length){ el.innerHTML = '<div class="td-empty-note">'+(plOpenOnly?'No open positions right now.':'Nothing to show for this period.')+'</div>'; return; }
+    var rows = c.rows.filter(function(r){ return r.realised || r.unreal; }).sort(function(a,b){ return Math.abs(b.total)-Math.abs(a.total); }).slice(0,14);
+    if(!rows.length){ el.innerHTML = '<div class="td-empty-note">Nothing to show for this period.</div>'; return; }
     var mx = Math.max.apply(null, rows.map(function(r){ return Math.max(Math.abs(r.realised), Math.abs(r.unreal||0)); })) || 1;
     el.innerHTML = rows.map(function(r){
       var seg = function(v, cls){
@@ -12194,11 +12290,8 @@
   function plRenderTable(c){
     var tbl = bkEl('plTable'), sub = bkEl('plTableSub'); if(!tbl) return;
     var rows = c.rows.slice().sort(function(a,b){ return Math.abs(b.total)-Math.abs(a.total); });
-    if(plOpenOnly) rows = rows.filter(function(r){ return r.qty!==0; }).sort(function(a,b){ return (b.value||b.cost||0)-(a.value||a.cost||0); });
-    if(!rows.length){ tbl.innerHTML = '<tr><td style="text-align:left; color:var(--ink-faint); padding:24px 0;">'+(plOpenOnly?'No open positions right now.':'No trades yet.')+'</td></tr>'; if(sub) sub.textContent = plOpenOnly?'0 open':''; return; }
-    if(sub) sub.textContent = rows.length+(plOpenOnly?' open position':' stock')+(rows.length===1?'':'s');
-    var totReal = plOpenOnly ? rows.reduce(function(a,r){ return a+(r.realised||0); },0) : c.R.realised;
-    var totAll = plOpenOnly ? rows.reduce(function(a,r){ return a+(r.total||0); },0) : c.total;
+    if(!rows.length){ tbl.innerHTML = '<tr><td style="text-align:left; color:var(--ink-faint); padding:24px 0;">No trades yet.</td></tr>'; return; }
+    if(sub) sub.textContent = rows.length+' stock'+(rows.length===1?'':'s');
     var th = '<tr><th>Stock</th><th>Qty</th><th>Avg buy</th><th>LTP</th><th>Day</th><th>Invested</th><th>Value</th><th>Unrealised</th><th>Realised</th><th>Total</th></tr>';
     var body = rows.map(function(r){
       var open = r.qty!==0;
@@ -12212,7 +12305,7 @@
         '<td class="'+bkSignCls(r.realised)+'">'+(r.realisedCount ? plMoney(r.realised) : '—')+'</td>' +
         '<td class="'+bkSignCls(r.total)+'" style="font-weight:800;">'+plMoney(r.total)+'</td></tr>';
     }).join('');
-    var tot = '<tr><td><span class="sym">Total</span></td><td></td><td></td><td></td><td class="'+bkSignCls(c.U.dayKnown?c.U.dayPnl:null)+'">'+(c.U.dayKnown?plMoney(c.U.dayPnl):'—')+'</td><td>'+(c.U.open?fmtMoney(c.U.cost):'—')+'</td><td>'+(c.U.withPrice?fmtMoney(c.U.value):'—')+'</td><td class="'+bkSignCls(c.U.unreal)+'" style="font-weight:800;">'+(c.U.withPrice?plMoney(c.U.unreal):'—')+'</td><td class="'+bkSignCls(totReal)+'" style="font-weight:800;">'+plMoney(totReal)+'</td><td class="'+bkSignCls(totAll)+'" style="font-weight:800;">'+plMoney(totAll)+'</td></tr>';
+    var tot = '<tr><td><span class="sym">Total</span></td><td></td><td></td><td></td><td class="'+bkSignCls(c.U.dayKnown?c.U.dayPnl:null)+'">'+(c.U.dayKnown?plMoney(c.U.dayPnl):'—')+'</td><td>'+(c.U.open?fmtMoney(c.U.cost):'—')+'</td><td>'+(c.U.withPrice?fmtMoney(c.U.value):'—')+'</td><td class="'+bkSignCls(c.U.unreal)+'" style="font-weight:800;">'+(c.U.withPrice?plMoney(c.U.unreal):'—')+'</td><td class="'+bkSignCls(c.R.realised)+'" style="font-weight:800;">'+plMoney(c.R.realised)+'</td><td class="'+bkSignCls(c.total)+'" style="font-weight:800;">'+plMoney(c.total)+'</td></tr>';
     // flash cells whose price moved since the last tick
     var prev = {}; tbl.querySelectorAll('td[data-ltp]').forEach(function(td){ prev[td.getAttribute('data-ltp')] = td.textContent; });
     tbl.innerHTML = th+body+tot;
@@ -12251,7 +12344,7 @@
   // TRADE CHART — candles from your broker with every buy & sell marked
   // (hand-drawn SVG, same approach as the rest of the app; no extra library)
   // =====================================================================
-  var tcState = {ticker:'', interval:'day', range:'trades', candles:[], source:'', error:'', synthetic:false, key:'', vs:0, vn:120, loadToken:0, loading:false};
+  var tcState = {ticker:'', interval:'day', type:'candle', range:'trades', candles:[], source:'', error:'', synthetic:false, key:'', vs:0, vn:120, loadToken:0, loading:false};
   var tcChromeDirty = true, tcCache = {}, tcLayout = null, tcRaf = 0, tcPointers = {}, tcDrag = null, tcPinch = null, tcInited = false;
   var TC_SPAN = {day:86400, week:7*86400, '60minute':3600, '15minute':900};
 
@@ -12313,6 +12406,36 @@
     s.vn = Math.min(N+6, cap); s.vs = Math.max(0, N+6-s.vn);
   }
 
+  // Some broker feeds send open/low as 0 or null (esp. SME / illiquid names), which makes
+  // candle bodies stretch down to the axis. Repair those so every candle is well-formed.
+  function tcClean(arr){
+    var prev = null;
+    return (arr||[]).map(function(c){
+      var o = +c.o, h = +c.h, l = +c.l, cl = +c.c;
+      if(!(cl>0)) cl = prev!==null ? prev : (h>0 ? h : (o>0 ? o : 0));
+      if(!(o>0)) o = prev!==null ? prev : cl;
+      if(!(h>0)) h = Math.max(o, cl);
+      if(!(l>0)) l = Math.min(o, cl);
+      h = Math.max(h, o, cl); l = Math.min(l, o, cl); prev = cl;
+      return {t:c.t, o:o, h:h, l:l, c:cl, v:c.v};
+    });
+  }
+  function tcFmtVol(v){ v = +v; return v>=1e7 ? (v/1e7).toFixed(2)+'Cr' : v>=1e5 ? (v/1e5).toFixed(2)+'L' : v>=1e3 ? (v/1e3).toFixed(1)+'K' : String(Math.round(v)); }
+  // TradingView-style OHLC legend, drawn top-left of the chart.
+  function tcOhlcSpans(candles, idx, W){
+    var s = tcState, c = candles[idx]; if(!c) return '';
+    var prev = idx>0 ? candles[idx-1].c : null, col = c.c>=c.o ? '#26A69A' : '#EF5350';
+    var ivl = {day:'1D', week:'1W', '60minute':'1H', '15minute':'15m'}[s.interval] || '';
+    var t = '<tspan fill="var(--ink)" font-weight="800">'+escapeHtml(s.ticker)+'</tspan><tspan fill="var(--ink-faint)"> · '+ivl+'   </tspan>';
+    if(s.synthetic) return t+'<tspan fill="var(--ink-faint)">your fills only</tspan>';
+    var f = function(l, v){ return '<tspan fill="var(--ink-faint)">'+l+' </tspan><tspan fill="'+col+'">'+bkPx(v)+'   </tspan>'; };
+    t += (W<560 ? f('C', c.c) : f('O', c.o)+f('H', c.h)+f('L', c.l)+f('C', c.c));
+    if(prev) t += '<tspan fill="'+col+'">'+bkPct((c.c-prev)/prev*100)+'</tspan>';
+    if(c.v && W>=560) t += '<tspan fill="var(--ink-faint)">   Vol </tspan><tspan fill="'+col+'">'+tcFmtVol(c.v)+'</tspan>';
+    return t;
+  }
+  function tcOhlcReset(){ var L = tcLayout, oh = bkEl('tcOhlc'); if(L && oh) oh.innerHTML = tcOhlcSpans(L.candles, L.N-1, L.W); }
+
   async function tcLoad(force){
     var s = tcState; if(!s.ticker){ tcPaint(); return; }
     var tok = ++s.loadToken; s.error = ''; s.synthetic = false; tcChromeDirty = true;
@@ -12329,8 +12452,9 @@
       var r = await bkGet('/candles', {symbol:key, interval:s.interval, from:rg.from, to:rg.to, broker:bkCfg().pref}, 45000);
       if(tok!==s.loadToken) return;
       if(!(r.candles||[]).length) throw new Error('The broker returned no candles for '+key+'.');
-      tcCache[ck] = {candles:r.candles, source:r.source, at:Date.now()};
-      s.candles = r.candles; s.source = r.source;
+      var cleaned = tcClean(r.candles);
+      tcCache[ck] = {candles:cleaned, source:r.source, at:Date.now()};
+      s.candles = cleaned; s.source = r.source;
       if(r.source==='kite' && r.symbol && r.symbol.indexOf(':')>-1 && r.symbol!==key && !bkSymbolMap()[s.ticker]){ bkSymbolMap()[s.ticker] = r.symbol; try{ saveDB(); }catch(e){} }
     }catch(e){
       if(tok!==s.loadToken) return;
@@ -12392,7 +12516,8 @@
     if(!N){ msg.style.display = 'flex'; msg.textContent = 'No data to draw for this stock.'; svg.innerHTML = ''; return; }
     msg.style.display = 'none';
 
-    var padL = 6, padR = 62, padT = 12, axisH = 22, volH = s.synthetic ? 0 : 54, gapV = s.synthetic ? 0 : 6;
+    var isLine = s.type==='line' && !s.synthetic;
+    var padL = 6, padR = 62, padT = 30, axisH = 24, volH = (s.synthetic||isLine) ? 0 : Math.round(H*0.14), gapV = (s.synthetic||isLine) ? 0 : 6;
     var plotW = W-padL-padR, priceH = H-padT-axisH-volH-gapV;
     s.vn = Math.max(12, Math.min(s.vn, N+12)); s.vs = Math.max(-4, Math.min(s.vs, N-s.vn+10));
     var cw = plotW/s.vn, x = function(i){ return padL + (i-s.vs+0.5)*cw; };
@@ -12413,6 +12538,8 @@
     mList.forEach(function(m){ if(m.idx>=i0 && m.idx<=i1){ lo = Math.min(lo, m.price); hi = Math.max(hi, m.price); } });
     var open = bkOpenRows().filter(function(o){ return o.ticker===s.ticker; }), avgLine = null, ltpLine = null;
     if(open.length){ var o = open[0]; avgLine = o.avg; if(o.ltp!==null) ltpLine = o.ltp; }
+    if(ltpLine===null && !s.synthetic && N) ltpLine = candles[N-1].c;
+    var lastCol = (N && candles[N-1].c < candles[N-1].o) ? '#EF5350' : '#26A69A';
     var near = function(v){ return v!==null && v>=lo*0.75 && v<=hi*1.25; };
     if(near(avgLine)){ lo = Math.min(lo, avgLine); hi = Math.max(hi, avgLine); }
     if(near(ltpLine)){ lo = Math.min(lo, ltpLine); hi = Math.max(hi, ltpLine); }
@@ -12423,28 +12550,41 @@
     var out = '';
     // grid + price axis
     tcNiceTicks(lo, hi, Math.max(3, Math.round(priceH/62))).forEach(function(v){
-      out += '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+y(v).toFixed(1)+'" y2="'+y(v).toFixed(1)+'" stroke="var(--line)" stroke-width="1" opacity=".7"/>' +
+      out += '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+y(v).toFixed(1)+'" y2="'+y(v).toFixed(1)+'" stroke="var(--line)" stroke-width="1" opacity=".45"/>' +
         '<text x="'+(W-padR+6)+'" y="'+(y(v)+3.5).toFixed(1)+'" font-size="10" font-family="IBM Plex Mono" fill="var(--ink-faint)">'+bkPx(v)+'</text>';
     });
     // x-axis labels
     var ticks = Math.max(2, Math.floor(plotW/110));
     for(var j=0;j<=ticks;j++){
       var ii = Math.round(s.vs + (s.vn-1)*j/ticks); if(ii<0 || ii>=N) continue;
-      out += '<text x="'+x(ii).toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="10" font-family="Inter" fill="var(--ink-faint)">'+tcFmtAxisDate(candles[ii].t)+'</text>';
+      out += '<line x1="'+x(ii).toFixed(1)+'" x2="'+x(ii).toFixed(1)+'" y1="'+padT+'" y2="'+(H-axisH)+'" stroke="var(--line)" stroke-width="1" opacity=".3"/>' +
+        '<text x="'+x(ii).toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" font-size="10" font-family="Inter" fill="var(--ink-faint)">'+tcFmtAxisDate(candles[ii].t)+'</text>';
     }
     out += '<clipPath id="tcClip"><rect x="'+padL+'" y="0" width="'+plotW+'" height="'+H+'"/></clipPath><g clip-path="url(#tcClip)">';
 
     if(s.synthetic){
       out += '<text x="'+(padL+plotW/2)+'" y="'+(padT+16)+'" text-anchor="middle" font-size="11" fill="var(--ink-faint)">Price candles unavailable — showing only your buys &amp; sells</text>';
     } else {
-      var bw = Math.max(1, Math.min(14, cw*0.68)), vmax = 0;
+      var UPC = '#26A69A', DNC = '#EF5350', vmax = 0;
       for(var v=i0; v<=i1; v++) vmax = Math.max(vmax, candles[v].v||0);
-      for(var k2=i0;k2<=i1;k2++){
-        var c = candles[k2], up = c.c>=c.o, col = up ? 'var(--teal)' : 'var(--rose)', cx = x(k2);
-        out += '<line x1="'+cx.toFixed(1)+'" x2="'+cx.toFixed(1)+'" y1="'+y(c.h).toFixed(1)+'" y2="'+y(c.l).toFixed(1)+'" stroke="'+col+'" stroke-width="1"/>';
-        var yt = y(Math.max(c.o,c.c)), yb = y(Math.min(c.o,c.c));
-        out += '<rect x="'+(cx-bw/2).toFixed(1)+'" y="'+yt.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.max(1, yb-yt).toFixed(1)+'" fill="'+col+'" '+(up?'fill-opacity=".92"':'')+'/>';
-        if(vmax && c.v){ var vh = (c.v/vmax)*volH; out += '<rect x="'+(cx-bw/2).toFixed(1)+'" y="'+(H-axisH-vh).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+vh.toFixed(1)+'" fill="var(--ink-faint)" opacity=".30"/>'; }
+      if(isLine){
+        var pts = [], yb0 = padT+priceH;
+        for(var kk=i0; kk<=i1; kk++) pts.push(x(kk).toFixed(1)+','+y(candles[kk].c).toFixed(1));
+        var lcol = candles[i1].c >= candles[i0].c ? UPC : DNC;
+        out += '<defs><linearGradient id="tcAreaG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+lcol+'" stop-opacity=".30"/><stop offset="1" stop-color="'+lcol+'" stop-opacity="0"/></linearGradient></defs>' +
+          '<polygon points="'+x(i0).toFixed(1)+','+yb0+' '+pts.join(' ')+' '+x(i1).toFixed(1)+','+yb0+'" fill="url(#tcAreaG)"/>' +
+          '<polyline points="'+pts.join(' ')+'" fill="none" stroke="'+lcol+'" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"/>';
+      } else {
+        var bw = Math.max(1, Math.min(11, Math.floor(cw*0.72)));
+        out += '<g shape-rendering="crispEdges">';
+        for(var k2=i0;k2<=i1;k2++){
+          var c = candles[k2], col = c.c>=c.o ? UPC : DNC, cx = Math.round(x(k2))+0.5;
+          out += '<line x1="'+cx+'" x2="'+cx+'" y1="'+y(c.h).toFixed(1)+'" y2="'+y(c.l).toFixed(1)+'" stroke="'+col+'" stroke-width="1"/>';
+          var yt = y(Math.max(c.o,c.c)), yb = y(Math.min(c.o,c.c));
+          out += '<rect x="'+Math.round(cx-bw/2)+'" y="'+yt.toFixed(1)+'" width="'+bw+'" height="'+Math.max(1, yb-yt).toFixed(1)+'" fill="'+col+'"/>';
+          if(vmax && c.v){ var vh = (c.v/vmax)*volH; out += '<rect x="'+Math.round(cx-bw/2)+'" y="'+(H-axisH-vh).toFixed(1)+'" width="'+bw+'" height="'+vh.toFixed(1)+'" fill="'+col+'" opacity=".32"/>'; }
+        }
+        out += '</g>';
       }
     }
 
@@ -12461,7 +12601,7 @@
     var label = function(v, text, col, fg){ return '<rect x="'+(W-padR+1)+'" y="'+(y(v)-8).toFixed(1)+'" width="'+(padR-2)+'" height="16" rx="3" fill="'+col+'"/><text x="'+(W-padR+5)+'" y="'+(y(v)+3.6).toFixed(1)+'" font-size="10" font-weight="700" font-family="IBM Plex Mono" fill="'+fg+'">'+text+'</text>'; };
     var lines = '';
     if(avgLine!==null && avgLine>=lo && avgLine<=hi) lines += '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+y(avgLine).toFixed(1)+'" y2="'+y(avgLine).toFixed(1)+'" stroke="var(--accent)" stroke-width="1.5"/>';
-    if(ltpLine!==null && ltpLine>=lo && ltpLine<=hi) lines += '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+y(ltpLine).toFixed(1)+'" y2="'+y(ltpLine).toFixed(1)+'" stroke="var(--ink)" stroke-width="1" stroke-dasharray="2,3" opacity=".7"/>';
+    if(ltpLine!==null && ltpLine>=lo && ltpLine<=hi) lines += '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+y(ltpLine).toFixed(1)+'" y2="'+y(ltpLine).toFixed(1)+'" stroke="'+lastCol+'" stroke-width="1" stroke-dasharray="3,3" opacity=".9"/>';
     open.forEach(function(o){ o.trades.forEach(function(t){ var sl = parseFloat(t.slPrice); if(!isNaN(sl) && sl>=lo && sl<=hi) lines += '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+y(sl).toFixed(1)+'" y2="'+y(sl).toFixed(1)+'" stroke="var(--rose)" stroke-width="1" stroke-dasharray="6,4" opacity=".7"/>'; }); });
     out += lines;
 
@@ -12469,7 +12609,7 @@
     mList.forEach(function(m){
       if(m.idx<i0-1 || m.idx>i1+1) return;
       var c = candles[m.idx], cx = x(m.idx), buy = m.side==='buy', col = buy ? '#2F7BFF' : '#F08A24', r = Math.max(7, Math.min(10, cw*0.5+4)), yp = y(m.price), cy;
-      if(s.synthetic) cy = buy ? yp+r+5 : yp-r-5; else cy = buy ? y(c.l)+r+6 : y(c.h)-r-6;
+      if(s.synthetic || isLine) cy = buy ? yp+r+5 : yp-r-5; else cy = buy ? y(c.l)+r+6 : y(c.h)-r-6;
       out += '<line x1="'+cx.toFixed(1)+'" x2="'+cx.toFixed(1)+'" y1="'+cy.toFixed(1)+'" y2="'+yp.toFixed(1)+'" stroke="'+col+'" stroke-width="1.4"/>' +
         '<circle cx="'+cx.toFixed(1)+'" cy="'+yp.toFixed(1)+'" r="2.4" fill="'+col+'"/>' +
         '<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+r+'" fill="'+col+'" stroke="var(--surface)" stroke-width="1.5"/>' +
@@ -12477,8 +12617,11 @@
     });
     out += '</g>';
     if(avgLine!==null && avgLine>=lo && avgLine<=hi) out += label(avgLine, bkPx(avgLine), 'var(--accent)', 'var(--accent-ink)');
-    if(ltpLine!==null && ltpLine>=lo && ltpLine<=hi) out += label(ltpLine, bkPx(ltpLine), 'var(--ink)', 'var(--surface)');
-    out += '<g id="tcCross" style="display:none;"><line id="tcCv" y1="'+padT+'" y2="'+(H-axisH)+'" stroke="var(--ink-faint)" stroke-dasharray="3,3"/><line id="tcCh" x1="'+padL+'" x2="'+(W-padR)+'" stroke="var(--ink-faint)" stroke-dasharray="3,3"/></g>';
+    if(ltpLine!==null && ltpLine>=lo && ltpLine<=hi) out += label(ltpLine, bkPx(ltpLine), lastCol, '#fff');
+    out += '<text id="tcOhlc" x="'+(padL+8)+'" y="18" font-size="11" font-family="IBM Plex Mono" stroke="var(--surface)" stroke-width="3" style="paint-order:stroke; pointer-events:none;">'+tcOhlcSpans(candles, N-1, W)+'</text>';
+    out += '<g id="tcCross" style="display:none; pointer-events:none;"><line id="tcCv" y1="'+padT+'" y2="'+(H-axisH)+'" stroke="var(--ink-faint)" stroke-dasharray="3,3"/><line id="tcCh" x1="'+padL+'" x2="'+(W-padR)+'" stroke="var(--ink-faint)" stroke-dasharray="3,3"/>' +
+      '<rect id="tcCyR" x="'+(W-padR+1)+'" width="'+(padR-2)+'" height="17" rx="3" fill="var(--ink)"/><text id="tcCyT" x="'+(W-padR+5)+'" font-size="10" font-weight="700" font-family="IBM Plex Mono" fill="var(--surface)"></text>' +
+      '<rect id="tcCxR" y="'+(H-axisH+2)+'" height="17" rx="3" fill="var(--ink)"/><text id="tcCxT" y="'+(H-axisH+14)+'" text-anchor="middle" font-size="10" font-weight="700" font-family="Inter" fill="var(--surface)"></text></g>';
     svg.innerHTML = out;
     tcLayout = {W:W, H:H, padL:padL, padR:padR, padT:padT, plotW:plotW, priceH:priceH, cw:cw, lo:lo, hi:hi, candles:candles, markers:markers, N:N};
   }
@@ -12505,7 +12648,7 @@
       tile('Open position', o ? (o.dir==='short'?'−':'')+o.qty+' @ '+bkPx(o.avg) : 'Flat', '', o ? 'cost '+fmtMoney(o.cost) : 'no open qty') +
       tile('Last price', o && o.ltp!==null ? bkPx(o.ltp) : (liveQuotes[s.key] ? bkPx(liveQuotes[s.key].ltp) : '—'), '', o && o.dayPct!==null ? '<span class="'+bkSignCls(o.dayPct)+'">'+bkPct(o.dayPct)+' today</span>' : (o && !o.live ? 'last known' : '')) +
       tile('Unrealised', unreal!==null ? plMoney(unreal) : '—', bkSignCls(unreal), o && o.unrealPct!==null ? bkPct(o.unrealPct) : '') +
-      tile('Realised', nClosed ? plMoney(realised) : '—', bkSignCls(nClosed?realised:null), nClosed+' closed') +
+      ((o && !nClosed) ? '' : tile('Realised', nClosed ? plMoney(realised) : '—', bkSignCls(nClosed?realised:null), nClosed+' closed')) +
       tile('Total', (nClosed||unreal!==null) ? plMoney(total) : '—', bkSignCls((nClosed||unreal!==null)?total:null), 'this stock');
   }
 
@@ -12539,15 +12682,29 @@
     var L = tcLayout, stage = bkEl('tcStage'), tip = bkEl('tcTip'), cross = bkEl('tcCross'); if(!L || !stage || !tip || !cross) return;
     var r = stage.getBoundingClientRect(), px = (clientX-r.left)/r.width*L.W, py = (clientY-r.top)/r.height*L.H;
     var idx = Math.floor((px-L.padL)/L.cw + tcState.vs);
-    if(idx<0 || idx>=L.N || px>L.W-L.padR){ cross.style.display = 'none'; tip.style.display = 'none'; return; }
+    if(idx<0 || idx>=L.N || px>L.W-L.padR){ cross.style.display = 'none'; tip.style.display = 'none'; tcOhlcReset(); return; }
     var c = L.candles[idx], cx = L.padL + (idx-tcState.vs+0.5)*L.cw;
     cross.style.display = ''; var cv = bkEl('tcCv'), ch = bkEl('tcCh');
     cv.setAttribute('x1', cx); cv.setAttribute('x2', cx); ch.setAttribute('y1', py); ch.setAttribute('y2', py);
+    var inPrice = py>=L.padT && py<=L.padT+L.priceH;
+    ch.style.display = inPrice ? '' : 'none';
+    var cyR = bkEl('tcCyR'), cyT = bkEl('tcCyT'), cxR = bkEl('tcCxR'), cxT = bkEl('tcCxT');
+    if(cyR && cyT){
+      cyR.style.display = cyT.style.display = inPrice ? '' : 'none';
+      if(inPrice){ cyR.setAttribute('y', py-8.5); cyT.setAttribute('y', py+3.5); cyT.textContent = bkPx(L.lo+(1-(py-L.padT)/L.priceH)*(L.hi-L.lo)); }
+    }
+    if(cxR && cxT){
+      var dl = tcFmtAxisDate(c.t); if((tcState.interval==='day'||tcState.interval==='week') && !(tcState.vn>240)) dl += " '"+String(new Date((c.t+19800)*1000).getUTCFullYear()).slice(2);
+      var tw0 = dl.length*6.3+14, tx0 = Math.max(L.padL, Math.min(L.W-L.padR-tw0, cx-tw0/2));
+      cxR.setAttribute('x', tx0); cxR.setAttribute('width', tw0); cxT.setAttribute('x', tx0+tw0/2); cxT.textContent = dl;
+    }
+    var oh = bkEl('tcOhlc'); if(oh && !tcState.synthetic) oh.innerHTML = tcOhlcSpans(L.candles, idx, L.W);
     var chg = idx>0 ? (c.c-L.candles[idx-1].c)/L.candles[idx-1].c*100 : null;
     var h = '<div class="h">'+tcFmtAxisDate(c.t)+(tcState.interval==='day'||tcState.interval==='week' ? ' · '+new Date((c.t+19800)*1000).getUTCFullYear() : '')+'</div>';
     if(tcState.synthetic) h += '<div>Fill price '+bkPx(c.c)+'</div>';
     else h += '<div>O '+bkPx(c.o)+'  H '+bkPx(c.h)+'</div><div>L '+bkPx(c.l)+'  C '+bkPx(c.c)+(chg!==null?' ('+bkPct(chg)+')':'')+'</div>'+(c.v?'<div>Vol '+Number(c.v).toLocaleString('en-IN')+'</div>':'');
     ['buy','sell'].forEach(function(side){ var m = L.markers[idx+'|'+side]; if(!m) return; h += '<div class="'+(side==='buy'?'b':'s')+'">'+(side==='buy'?'Bought ':'Sold ')+m.qty+' @ '+bkPx(m.price)+(m.fills.length>1?' (avg of '+m.fills.length+')':'')+'</div>'; });
+    if(!tcState.synthetic && !L.markers[idx+'|buy'] && !L.markers[idx+'|sell']){ tip.style.display = 'none'; return; }
     tip.innerHTML = h; tip.style.display = 'block';
     var tw = tip.offsetWidth, left = (cx/L.W*r.width) + 14; if(left+tw > r.width-4) left = (cx/L.W*r.width) - tw - 14;
     tip.style.left = Math.max(4,left)+'px'; tip.style.top = Math.max(4, Math.min(r.height-tip.offsetHeight-4, (py/L.H*r.height)-20))+'px';
@@ -12581,7 +12738,7 @@
     });
     var end = function(e){ delete tcPointers[e.pointerId]; if(Object.keys(tcPointers).length<2) tcPinch = null; if(!Object.keys(tcPointers).length){ if(tcDrag && !tcDrag.moved && e.pointerType==='touch') tcHover(e.clientX, e.clientY); tcDrag = null; stage.classList.remove('dragging'); } };
     stage.addEventListener('pointerup', end); stage.addEventListener('pointercancel', end);
-    stage.addEventListener('pointerleave', function(e){ if(e.pointerType!=='touch'){ var t = bkEl('tcTip'), c = bkEl('tcCross'); if(t) t.style.display = 'none'; if(c) c.style.display = 'none'; } });
+    stage.addEventListener('pointerleave', function(e){ if(e.pointerType!=='touch'){ var t = bkEl('tcTip'), c = bkEl('tcCross'); if(t) t.style.display = 'none'; if(c) c.style.display = 'none'; tcOhlcReset(); } });
     stage.addEventListener('wheel', function(e){
       if(e.ctrlKey || e.metaKey){ e.preventDefault(); var r = stage.getBoundingClientRect(); tcZoom(e.deltaY>0 ? 1.15 : 1/1.15, (e.clientX-r.left)/r.width); }
       else if(Math.abs(e.deltaX)>Math.abs(e.deltaY)){ e.preventDefault(); tcState.vs += e.deltaX/(tcLayout?tcLayout.cw:8); tcPaint(); }
@@ -12592,6 +12749,16 @@
     window.addEventListener('resize', function(){ if(bkPanelActive('chart')) tcPaint(); });
 
     bkEl('tcTicker').addEventListener('change', function(e){ tcState.ticker = e.target.value; tcLoad(); });
+    var tyEl = bkEl('tcType');
+    if(tyEl){
+      try{ var sv = localStorage.getItem('tcType'); if(sv==='line' || sv==='candle') tcState.type = sv; }catch(err){}
+      tyEl.querySelectorAll('.eq-range-btn').forEach(function(x){ x.classList.toggle('on', x.dataset.ty===tcState.type); });
+      tyEl.addEventListener('click', function(e){
+        var b = e.target.closest('[data-ty]'); if(!b) return;
+        tcState.type = b.dataset.ty; try{ localStorage.setItem('tcType', tcState.type); }catch(err){}
+        tyEl.querySelectorAll('.eq-range-btn').forEach(function(x){ x.classList.toggle('on', x===b); }); tcPaint();
+      });
+    }
     bkEl('tcInterval').addEventListener('click', function(e){
       var b = e.target.closest('[data-iv]'); if(!b) return;
       tcState.interval = b.dataset.iv; this.querySelectorAll('.eq-range-btn').forEach(function(x){ x.classList.toggle('on', x===b); });
@@ -12856,7 +13023,8 @@
   }
 
   function onTradePanelActivated(name){
-    if(name==='pnl'){ renderPnlPanel(); bkMaybeRefresh(); }
+    if(name==='portfolio'){ renderPortfolio(); bkMaybeRefresh(); }
+    else if(name==='pnl'){ renderPnlPanel(); bkMaybeRefresh(); }
     else if(name==='chart'){ tcInit(); tcRefreshTickerList(); tcChromeDirty = true; tcLoad(); bkMaybeRefresh(); }
     else if(name==='overview'){ try{ renderTradeOverview(); }catch(e){} bkMaybeRefresh(); }
   }
