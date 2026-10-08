@@ -6821,6 +6821,9 @@
   var liveMissing = [];
   var liveState = {status:'off', msg:'', source:'', asOf:0};
   var liveInflight = null, liveTimer = null, bkLastPersist = 0, bkResolveTried = {};
+  var bkCooldownUntil = 0, bkRateStrikes = 0, bkLastAttempt = 0;
+  function bkIsRateLimit(e){ return !!e && (e.status===429 || /rate.?limit|too many requests|try again later/i.test(String(e.message||''))); }
+  function bkStartCooldown(){ bkRateStrikes++; var ms = Math.min(300000, 60000*Math.pow(2, bkRateStrikes-1)); bkCooldownUntil = Math.max(bkCooldownUntil, Date.now()+ms); return ms; }
   var bkStatusCache = null, bkLoginNeeded = false;
 
   function bkCfg(){
@@ -6957,7 +6960,9 @@
 
   async function bkRefreshQuotes(){
     if(!bkReady()){ bkSetLive('off'); return false; }
+    if(Date.now() < bkCooldownUntil){ bkSetLive('err', 'Rate limit hit — price refresh paused for '+Math.ceil((bkCooldownUntil-Date.now())/1000)+'s (showing last prices)'); return false; }
     if(liveInflight) return liveInflight;
+    bkLastAttempt = Date.now();
     var keys = new Set();
     bkOpenRows().forEach(function(r){ if(r.key) keys.add(r.key); });
     if(typeof tcState!=='undefined' && tcState && tcState.ticker){ var ck = bkSymbolKey(tcState.ticker); if(ck) keys.add(ck); }
@@ -6971,13 +6976,14 @@
         var got = {}, missing = [], src = new Set(), asOf = Date.now();
         out.forEach(function(r){ Object.assign(got, r.quotes||{}); missing = missing.concat(r.missing||[]); if(r.source) String(r.source).split('+').forEach(function(x){ src.add(x); }); });
         Object.keys(got).forEach(function(k){ var q = got[k], old = liveQuotes[k]; q.prevLtp = old ? old.ltp : null; liveQuotes[k] = q; });
-        liveMissing = missing; bkLoginNeeded = false;
+        liveMissing = missing; bkLoginNeeded = false; bkRateStrikes = 0;
         bkApplyLiveMarks();
         bkSetLive('ok', '', Array.from(src).join('+'), asOf);
         bkLiveDependents();
         return true;
       }catch(e){
         if(e.code==='kite_login') bkLoginNeeded = true;
+        if(bkIsRateLimit(e)){ var cd = bkStartCooldown(); bkSetLive('err', 'Rate limit hit — pausing price refresh for '+Math.round(cd/1000)+'s (showing last prices)'); bkLiveDependents(); return false; }
         bkSetLive('err', e.message);
         bkLiveDependents();
         return false;
@@ -6987,6 +6993,8 @@
   }
   function bkMaybeRefresh(){
     if(!bkReady() || !bkCfg().livePrices) { bkPaintBadges(); return; }
+    if(Date.now() < bkCooldownUntil){ bkPaintBadges(); return; }
+    if(liveState.status==='err' && Date.now()-bkLastAttempt < 30000) return;
     var age = Date.now()-(liveState.asOf||0), limit = bkMarketOpen() ? 25000 : 300000;
     if(liveState.status!=='ok' || age>limit) bkRefreshQuotes();
   }
@@ -7032,9 +7040,15 @@
     const disk = loadBenchmarkDiskCache(), cached = disk[key];
     if(cached && (Date.now()-cached.fetchedAt) < BENCHMARK_CACHE_TTL) return cached.points;
     if(!bkReady()) return cached ? cached.points : null;
+    if(Date.now() < bkCooldownUntil) return cached ? cached.points : null;
+    const failAt = disk['_fail_'+key];
+    if(!cached && failAt && Date.now()-failAt < 20*60*1000) return null;   // don't re-hammer a symbol that just failed
     const to = todayKey(), fromD = new Date(); fromD.setDate(fromD.getDate()-1820);
     let lastErr = null;
+    let first = true;
     for(const symbol of cfg.symbols){
+      if(!first) await new Promise(function(r){ setTimeout(r, 400); });
+      first = false;
       try{
         const r = await bkGet('/candles', {symbol:symbol, interval:'day', from: todayKey(fromD), to:to, broker: bkCfg().pref}, 40000);
         const points = (r.candles||[]).map(function(c){ return {date: bkIstDate(c.t), close: c.c}; }).filter(function(p){ return p.close!=null && !isNaN(p.close); });
@@ -7042,9 +7056,10 @@
         disk[key] = { points:points, fetchedAt: Date.now(), symbol:symbol, source:r.source };
         saveBenchmarkDiskCache(disk);
         return points;
-      }catch(err){ lastErr = err; console.warn('Benchmark fetch failed for', key, symbol, err.message); if(err.code==='no_proxy' || err.code==='kite_login') break; }
+      }catch(err){ lastErr = err; console.warn('Benchmark fetch failed for', key, symbol, err.message); if(bkIsRateLimit(err)){ bkStartCooldown(); break; } if(err.code==='no_proxy' || err.code==='kite_login') break; }
     }
     if(!attempt && lastErr && (lastErr.code==='timeout' || lastErr.code==='network')){ await new Promise(function(r){ setTimeout(r,1500); }); return fetchBenchmarkSeries(key, 1); }
+    if(lastErr && !bkIsRateLimit(lastErr)){ disk['_fail_'+key] = Date.now(); saveBenchmarkDiskCache(disk); }
     return cached ? cached.points : null;
   }
 
