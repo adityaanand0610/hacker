@@ -7753,6 +7753,16 @@
   // feature first ran; earlier history can't be reconstructed.
   // =====================================================================
   var usnapLastSave = 0, usnapLastSig = '';
+  // Safety net: if anything throws, show it on screen (once per 10s) instead of the app silently freezing,
+  // so the exact error can be reported.
+  var lastErrToast = 0;
+  function reportRuntimeError(msg){
+    console.error('[FocusVerge]', msg);
+    if(Date.now()-lastErrToast < 10000) return; lastErrToast = Date.now();
+    try{ showToast('Something went wrong: '+String(msg).slice(0,140)); }catch(e){}
+  }
+  window.addEventListener('error', function(ev){ reportRuntimeError((ev.message||'error')+(ev.lineno?' (line '+ev.lineno+')':'')); });
+  window.addEventListener('unhandledrejection', function(ev){ var r = ev.reason; reportRuntimeError((r && r.message) || r || 'promise rejected'); });
   function usnapMarkDate(open){
     if(open.some(function(t){ return t.liveMark; })) return todayKey();
     var best = '';
