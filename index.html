@@ -12478,6 +12478,15 @@
     var rg = tcRangeDates(fills), ck = [key, s.interval, rg.from, rg.to].join('|');
     var hit = tcCache[ck], ttl = (s.interval==='day'||s.interval==='week') ? 1800000 : 120000;
     if(hit && !force && Date.now()-hit.at<ttl){ s.candles = hit.candles; s.source = hit.source; s.loading = false; tcFit(); tcPaint(); return; }
+    function useStaleOrWait(secs){
+      var st = tcCache[ck];
+      if(st){ s.candles = st.candles; s.source = st.source; s.synthetic = false; s.error = ''; }
+      else { s.candles = tcSynthetic(fills); s.synthetic = true; s.error = 'Groww rate limit — price history will load automatically in about '+secs+'s'; }
+      s.loading = false; tcChromeDirty = true; tcFit(); tcPaint();
+      clearTimeout(s.retryT);
+      s.retryT = setTimeout(function(){ if(tcState===s && bkPanelActive('chart')) tcLoad(false); }, Math.max(2000, bkCooldownUntil-Date.now()+1500));
+    }
+    if(Date.now() < bkCooldownUntil){ useStaleOrWait(Math.ceil((bkCooldownUntil-Date.now())/1000)); return; }
     s.loading = true; tcPaint();
     try{
       var r = await bkGet('/candles', {symbol:key, interval:s.interval, from:rg.from, to:rg.to, broker:bkCfg().pref}, 45000);
@@ -12489,6 +12498,7 @@
       if(r.source==='kite' && r.symbol && r.symbol.indexOf(':')>-1 && r.symbol!==key && !bkSymbolMap()[s.ticker]){ bkSymbolMap()[s.ticker] = r.symbol; try{ saveDB(); }catch(e){} }
     }catch(e){
       if(tok!==s.loadToken) return;
+      if(bkIsRateLimit(e)){ useStaleOrWait(Math.round(bkStartCooldown()/1000)); return; }
       s.candles = tcSynthetic(fills); s.synthetic = true; s.error = e.message || 'Could not load price history.'; if(e.code==='kite_login') bkLoginNeeded = true;
     }
     s.loading = false; tcChromeDirty = true; tcFit(); tcPaint();
