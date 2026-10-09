@@ -6822,8 +6822,15 @@
   var liveState = {status:'off', msg:'', source:'', asOf:0};
   var liveInflight = null, liveTimer = null, bkLastPersist = 0, bkResolveTried = {};
   var bkCooldownUntil = 0, bkRateStrikes = 0, bkLastAttempt = 0;
+  try{ var _cd = JSON.parse(localStorage.getItem('fv_bk_cooldown')||'null'); if(_cd && _cd.until>Date.now()){ bkCooldownUntil = _cd.until; bkRateStrikes = _cd.strikes||1; } }catch(e){}
   function bkIsRateLimit(e){ return !!e && (e.status===429 || /rate.?limit|too many requests|try again later/i.test(String(e.message||''))); }
-  function bkStartCooldown(){ bkRateStrikes++; var ms = Math.min(300000, 60000*Math.pow(2, bkRateStrikes-1)); bkCooldownUntil = Math.max(bkCooldownUntil, Date.now()+ms); return ms; }
+  function bkStartCooldown(){ bkRateStrikes++; var ms = Math.min(300000, 30000*Math.pow(2, bkRateStrikes-1)); bkCooldownUntil = Math.max(bkCooldownUntil, Date.now()+ms); try{ localStorage.setItem('fv_bk_cooldown', JSON.stringify({until:bkCooldownUntil, strikes:bkRateStrikes})); }catch(e){}
+    clearTimeout(bkResumeTimer); bkResumeTimer = setTimeout(function(){ if(!document.hidden && bkTradesVisible() && bkMarketOpen()) bkRefreshQuotes(); }, (bkCooldownUntil-Date.now())+1500);
+    return ms; }
+  var bkResumeTimer = 0;
+  // Tap the price badge to retry right now (clears any rate-limit pause).
+  function bkForceRefresh(){ bkCooldownUntil = 0; bkRateStrikes = 0; try{ localStorage.removeItem('fv_bk_cooldown'); }catch(e){} bkLastAttempt = 0; return bkRefreshQuotes(); }
+  document.addEventListener('click', function(e){ var b = e.target.closest && e.target.closest('.bk-live-badge'); if(b && bkReady()) bkForceRefresh(); });
   var bkStatusCache = null, bkLoginNeeded = false;
 
   function bkCfg(){
@@ -6948,13 +6955,13 @@
     var hhmm = s.asOf ? new Date(s.asOf).toLocaleTimeString('en-IN',{hour:'2-digit', minute:'2-digit', second:'2-digit'}) : '';
     if(!bkReady()){ txt = 'Live prices: connect a broker in Settings'; }
     else if(s.status==='loading'){ txt = 'Fetching prices…'; cls = 'stale'; }
-    else if(s.status==='err'){ txt = 'Price feed: '+(s.msg||'error'); cls = 'err'; }
+    else if(s.status==='err'){ txt = 'Price feed: '+(s.msg||'error')+(hhmm?' · last update '+hhmm:'')+' · tap to retry'; cls = 'err'; }
     else if(s.status==='ok'){ if(bkMarketOpen()){ txt = 'LIVE · '+srcName+' · '+hhmm; cls = 'live'; } else { txt = 'Market closed · last price · '+srcName+' · '+hhmm; cls = 'stale'; } }
     else if(s.status==='idle'){ txt = s.msg || 'No open positions to price'; }
     else { txt = 'Live prices off'; }
     ['plLiveBadge','tcLiveBadge','pfLiveBadge'].forEach(function(id){
       var el = bkEl(id); if(!el) return;
-      el.className = 'bk-live-badge '+cls; el.querySelector('.bk-live-text').textContent = txt; el.title = s.msg || '';
+      el.className = 'bk-live-badge '+cls; el.style.cursor = 'pointer'; el.querySelector('.bk-live-text').textContent = txt; el.title = (s.msg || '') + ' — tap to refresh prices now';
     });
   }
 
@@ -6995,7 +7002,7 @@
     if(!bkReady() || !bkCfg().livePrices) { bkPaintBadges(); return; }
     if(Date.now() < bkCooldownUntil){ bkPaintBadges(); return; }
     if(liveState.status==='err' && Date.now()-bkLastAttempt < 30000) return;
-    var age = Date.now()-(liveState.asOf||0), limit = bkMarketOpen() ? 25000 : 300000;
+    var age = Date.now()-(liveState.asOf||0), limit = bkMarketOpen() ? 45000 : 300000;
     if(liveState.status!=='ok' || age>limit) bkRefreshQuotes();
   }
   function bkLiveDependents(){
@@ -7009,7 +7016,7 @@
     liveTimer = setInterval(function(){
       if(document.hidden || !bkReady() || !bkCfg().livePrices || !bkTradesVisible()) return;
       if(bkMarketOpen()) bkRefreshQuotes();
-    }, 30000);
+    }, 45000);
     document.addEventListener('visibilitychange', function(){ if(!document.hidden && bkTradesVisible()) bkMaybeRefresh(); });
   }
 
@@ -7025,9 +7032,10 @@
     midcap100:   { symbols: ['NSE:NIFTY MIDCAP 100', 'NSE:NIFTYMIDCAP100', 'NSE:NIFTY MIDCAP100', 'NSE:MOM100'], label: 'Nifty Midcap 100', color: 'var(--teal)' },
     smallcap250: { symbols: ['NSE:NIFTY SMLCAP 250', 'NSE:NIFTY SMALLCAP 250', 'NSE:NIFTYSMLCAP250', 'NSE:NIFTYSMALLCAP250', 'NSE:HDFCSML250'], label: 'Nifty Smallcap 250', color: 'var(--rose)' }
   };
-  const BENCHMARK_CACHE_KEY = 'fv_benchmark_cache_v4';
+  const BENCHMARK_CACHE_KEY = 'fv_benchmark_cache_v5';
   const BENCHMARK_CACHE_TTL = 12*60*60*1000;
   let benchmarkMemCache = {};
+  let benchQueue = Promise.resolve();
   let benchmarkVisible = { nifty50: true, midcap100: true, smallcap250: true };
   let cmpEnabled = { equity: false, roc: false };
 
@@ -7043,7 +7051,13 @@
     if(Date.now() < bkCooldownUntil) return cached ? cached.points : null;
     const failAt = disk['_fail_'+key];
     if(!cached && failAt && Date.now()-failAt < 20*60*1000) return null;   // don't re-hammer a symbol that just failed
-    const to = todayKey(), fromD = new Date(); fromD.setDate(fromD.getDate()-1820);
+    const to = todayKey(), fromD = new Date();
+    // Only fetch as far back as the portfolio's own history (fewer broker calls = fewer rate-limit hits).
+    let earliest = ''; try{ const h = sortedCapitalHistory(); if(h.length) earliest = h[0].date; }catch(e){}
+    (db.trades||[]).forEach(function(t){ const d = String(t.entryDT||t.date||'').slice(0,10); if(d && (!earliest || d<earliest)) earliest = d; });
+    let lookback = 400;
+    if(earliest){ const dd = Math.ceil((Date.now()-new Date(earliest+'T00:00:00').getTime())/86400000)+20; if(dd>0) lookback = Math.max(120, Math.min(1820, dd)); }
+    fromD.setDate(fromD.getDate()-lookback);
     let lastErr = null;
     let first = true;
     for(const symbol of cfg.symbols){
@@ -7074,7 +7088,9 @@
       return benchmarkMemCache[key];
     }
     benchmarkMemCache[key] = 'loading';
-    const pts = await fetchBenchmarkSeries(key);
+    const run = benchQueue.then(function(){ return fetchBenchmarkSeries(key); });
+    benchQueue = run.catch(function(){}).then(function(){ return new Promise(function(r){ setTimeout(r, 1500); }); });
+    const pts = await run;
     benchmarkMemCache[key] = (pts && pts.length) ? pts : 'error';
     return benchmarkMemCache[key];
   }
