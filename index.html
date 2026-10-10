@@ -2955,6 +2955,7 @@
         <div class="td-card-sub" id="tdXirrSub" style="margin-bottom:6px; display:block;"></div>
         <div class="cmp-note">This is shown in ₹, so it isn't directly comparable to an index — turn on "Compare vs index" on the Return on Capital chart above for the % comparison.</div>
         <div id="tdXirrChart"></div>
+        <div id="tdXirrIdx" style="margin-top:16px;"></div>
       </div>
 </div><div class="tr-pane" data-g="g1" data-p="2">
       <div class="td-card" id="tdTopRocCard" style="display:none;">
@@ -3203,7 +3204,7 @@
         </div>
         <div class="td-card" id="tdCostsCard" style="display:none;">
           <div class="td-card-head"><span>Costs &amp; Charges</span></div>
-          <div class="td-card-sub" style="margin-bottom:8px; display:block;">Brokerage, STT, DP charges, GST &amp; MTF interest — from every Groww P&amp;L Statement you've imported. Gross P&amp;L below covers only trades closed inside those same statement periods, so the two numbers are apples-to-apples.</div>
+          <div class="td-card-sub" style="margin-bottom:8px; display:block;">Brokerage, STT, DP charges, GST &amp; MTF interest — from every P&amp;L Statement you've imported. Gross P&amp;L below covers only trades closed inside those same statement periods, so the two numbers are apples-to-apples.</div>
           <div class="td-stat-grid" id="tdCostsStats"></div>
           <div id="tdCostsBreakdown" style="margin-top:10px;"></div>
         </div>
@@ -3603,32 +3604,15 @@
         <div class="todo-list" id="capitalHistoryList"></div>
       </div>
       <div class="card" id="brokerCard">
-        <div class="card-title">🔌 Broker connection <span style="font-weight:500; color:var(--ink-faint); font-size:11px;">· live prices, charts &amp; Zerodha sync</span></div>
-        <p style="font-size:12.5px; color:var(--ink-dim); margin-bottom:12px;">Zerodha (Kite) and Groww don't allow direct calls from a web page, so the app talks to a tiny proxy that you deploy once (<b>broker-proxy.worker.js</b>, free on Cloudflare). Your broker keys stay on that proxy, never in this app or in your cloud backup.</p>
-        <div class="modal-field"><label>Proxy URL</label><input type="url" id="bkUrl" placeholder="https://focusverge-broker.yourname.workers.dev" autocomplete="off" spellcheck="false"></div>
-        <div class="modal-field"><label>App key <span style="font-weight:400; color:var(--ink-faint);">(the APP_KEY you set on the proxy · stored on this device only)</span></label><input type="password" id="bkKey" placeholder="paste APP_KEY" autocomplete="off"></div>
-        <div class="modal-field"><label>Price source</label>
-          <select id="bkPref">
-            <option value="auto">Automatic (Zerodha first, Groww as backup)</option>
-            <option value="kite">Zerodha only</option>
-            <option value="groww">Groww first, Zerodha as backup</option>
-          </select>
-        </div>
+        <div class="card-title">📡 Live market data <span style="font-weight:500; color:var(--ink-faint); font-size:11px;">· prices, charts &amp; index comparison</span></div>
         <div class="toggle-row">
-          <div><div class="toggle-label">⚡ Live prices</div><div class="toggle-sub">Refresh open-position prices every 30 s while the market is open and the Trades tab is showing</div></div>
+          <div><div class="toggle-label">📈 Live prices</div><div class="toggle-sub">Refresh open-position prices about every 45 s while the market is open and the Trades tab is showing</div></div>
           <label class="switch"><input type="checkbox" id="bkLiveToggle"><span class="switch-track"></span></label>
-        </div>
-        <div class="toggle-row">
-          <div><div class="toggle-label">🔄 Auto-sync Zerodha trades</div><div class="toggle-sub">Pull each day's executed trades while the app is open (every 15 min in market hours, and once after close)</div></div>
-          <label class="switch"><input type="checkbox" id="bkAutoSyncToggle"><span class="switch-track"></span></label>
         </div>
         <div class="bk-status-list" id="bkStatusList"></div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button class="btn primary" id="bkSaveBtn" style="padding:9px 16px; font-size:12.5px;">Save &amp; test</button>
-          <button class="btn gold" id="bkConnectKiteBtn" style="padding:9px 16px; font-size:12.5px; display:none;">Connect Zerodha</button>
-          <button class="btn ghost" id="bkClearBtn" style="padding:9px 16px; font-size:12.5px;">Remove</button>
+          <button class="btn primary" id="bkSaveBtn" style="padding:9px 16px; font-size:12.5px;">Test connection</button>
         </div>
-        <p class="bk-note" style="margin-top:10px;">Zerodha logins expire every morning (~6 AM — a Zerodha rule), so tap <b>Connect Zerodha</b> once a day. Groww renews itself. Market-data access needs the paid Kite Connect plan and/or the Groww Trading API subscription.</p>
       </div>
     </div>
 
@@ -3798,18 +3782,8 @@
   <div class="modal-backdrop" id="csvImportModalBackdrop">
     <div class="modal-sheet" style="max-width:560px;">
       <button class="modal-close" id="csvImportModalClose">✕</button>
-            <div class="modal-title">Import / Sync Trades</div>
+            <div class="modal-title">Import Trades</div>
       <div id="csvImportStep1">
-        <div class="sync-block" id="zSyncBlock">
-          <div class="ttl"><span>⚡ Auto-sync from Zerodha</span><span class="pl-tag" id="zSyncTag">not set up</span></div>
-          <div class="bk-note">Pulls today's executed trades through your broker proxy and matches them against your open positions (FIFO), so sells close the right lots. Zerodha's API only exposes the <b>current day</b> — for older history, import the Console tradebook below. Anything already in your journal is skipped.</div>
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px;">
-            <button class="btn primary" id="zSyncBtn" style="padding:8px 16px; font-size:12.5px;">Sync now</button>
-            <label class="toggle-label" style="display:flex; gap:8px; align-items:center; font-size:12px; font-weight:600;"><span class="switch"><input type="checkbox" id="zAutoSyncToggle"><span class="switch-track"></span></span>Auto-sync</label>
-          </div>
-          <div class="sync-result" id="zSyncResult"></div>
-        </div>
-
         <div class="modal-field" style="margin-bottom:0;">
           <label>Tradebook / P&amp;L file</label>
           <label class="drop-zone" id="csvDropZone" for="csvImportFile">
@@ -3819,7 +3793,7 @@
           <input type="file" id="csvImportFile" style="position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
         </div>
         <div class="td-empty-note" style="text-align:left; padding:8px 0 0;">
-          <b>Zerodha Console</b> tradebook (.xlsx or .csv) — the header row is found automatically even when the sheet has client-info rows above it, and buy/sell legs are matched FIFO into round trips. A Console <b>tradewise exits</b> report (entry/exit date, quantity, buy &amp; sell value) also works. <b>Groww</b> Stocks P&amp;L Statement (.xlsx with "Trade Level" &amp; "Scrip Level" sheets) is detected automatically — realised trades, still-open holdings and the charges breakup in one go. Any other broker: columns <b>Ticker, Entry Date, Entry Price, Exit Date, Exit Price, Qty</b> (Direction optional).
+          <b>Broker</b> tradebook (.xlsx or .csv) — the header row is found automatically even when the sheet has client-info rows above it, and buy/sell legs are matched FIFO into round trips. A <b>tradewise exits</b> report (entry/exit date, quantity, buy &amp; sell value) also works. A broker <b>Stocks P&amp;L Statement</b> (.xlsx with "Trade Level" &amp; "Scrip Level" sheets) is detected automatically — realised trades, still-open holdings and the charges breakup in one go. Any other broker: columns <b>Ticker, Entry Date, Entry Price, Exit Date, Exit Price, Qty</b> (Direction optional).
         </div>
         <div id="csvImportError" class="td-empty-note" style="color:var(--rose); display:none; text-align:left; padding-top:8px;"></div>
       </div>
@@ -5794,7 +5768,7 @@
       }).filter(t=> t && t.ticker);
       if(built.length) return built;
     }
-    throw new Error('Unrecognized file format. Expected a broker tradebook export (Zerodha, Groww, etc.), or columns: Ticker, Entry Date, Entry Price, Exit Date, Exit Price, Qty.');
+    throw new Error('Unrecognized file format. Expected a broker tradebook / P&L statement export, or columns: Ticker, Entry Date, Entry Price, Exit Date, Exit Price, Qty.');
   }
 
   function detectAndParseCsv(text){
@@ -5970,7 +5944,7 @@
     const wb = XLSX.read(arrayBuffer, {type:'array', cellDates:true});
     const growwResult = tradesFromGrowwPnlStatement(wb);
     if(growwResult){
-      if(!growwResult.trades.length) throw new Error('Found a Groww P&L Statement but no realised or unrealised trade rows in it.');
+      if(!growwResult.trades.length) throw new Error('Found a P&L Statement but no realised or unrealised trade rows in it.');
       growwImportMeta = { charges: growwResult.charges, reportedRealisedPnl: growwResult.reportedRealisedPnl, reportedUnrealisedPnl: growwResult.reportedUnrealisedPnl, period: growwResult.period };
       return growwResult.trades;
     }
@@ -6013,7 +5987,6 @@
     document.getElementById('csvImportError').style.display = 'none';
     document.getElementById('csvImportConfirmBtn').style.display = 'none';
     csvImportBackdrop.classList.add('open');
-    try{ zRefreshTag(); }catch(e){}
   });
   const closeCsvImport = ()=> csvImportBackdrop.classList.remove('open');
   document.getElementById('csvImportModalClose').addEventListener('click', closeCsvImport);
@@ -6817,6 +6790,9 @@
   // =====================================================================
   var BK_CFG_KEY = 'fv_broker_conn_v1';          // device-only: proxy URL + app key (never goes to Firestore)
   var bkCfgObj = null;
+  // Fixed broker proxy for this app. Not shown anywhere in the UI.
+  var BK_FIXED_URL = 'https://focusverge-broker.adityaanandpics.workers.dev';
+  var BK_FIXED_KEY = '2bf647ad6127d929618b5751875e98d4b6cf9cf9c786d5f8';
   var liveQuotes = {};                            // 'NSE:XYZ' -> {ltp, prevClose, dayChange, dayChangePct, source, ts}
   var liveMissing = [];
   var liveState = {status:'off', msg:'', source:'', asOf:0};
@@ -6835,8 +6811,9 @@
 
   function bkCfg(){
     if(bkCfgObj) return bkCfgObj;
-    var d = {url:'', appKey:'', pref:'auto', livePrices:true, autoSync:false};
+    var d = {url:BK_FIXED_URL, appKey:BK_FIXED_KEY, pref:'groww', livePrices:true};
     try{ bkCfgObj = Object.assign(d, JSON.parse(localStorage.getItem(BK_CFG_KEY)||'{}')); }catch(e){ bkCfgObj = d; }
+    bkCfgObj.url = BK_FIXED_URL; bkCfgObj.appKey = BK_FIXED_KEY; bkCfgObj.pref = 'groww'; delete bkCfgObj.autoSync;
     return bkCfgObj;
   }
   function bkSaveCfg(){ try{ localStorage.setItem(BK_CFG_KEY, JSON.stringify(bkCfg())); }catch(e){} }
@@ -6870,7 +6847,7 @@
     try{
       var res = await fetch(c.url.trim().replace(/\/+$/,'')+path+(qs.toString()?'?'+qs:''), {headers:{'X-App-Key': c.appKey}, signal: ctrl.signal});
       var body = null; try{ body = await res.json(); }catch(e){}
-      if(!res.ok){ var e1 = new Error((body && body.error) || ('Proxy error '+res.status)); e1.status = res.status; e1.code = (body && body.code) || ('http_'+res.status); throw e1; }
+      if(!res.ok){ var e1 = new Error(String((body && body.error) || ('Proxy error '+res.status)).replace(/groww|zerodha|kite( connect)?/ig, 'data provider')); e1.status = res.status; e1.code = (body && body.code) || ('http_'+res.status); throw e1; }
       return body;
     }catch(err){
       if(err.name==='AbortError'){ var e2 = new Error('The broker proxy took too long to respond.'); e2.code = 'timeout'; throw e2; }
@@ -6951,7 +6928,7 @@
   }
   function bkPaintBadges(){
     var s = liveState, cls = '', txt = '';
-    var srcName = s.source ? (s.source.indexOf('+')>-1 ? 'Zerodha + Groww' : (s.source==='kite' ? 'Zerodha' : (s.source==='groww' ? 'Groww' : s.source))) : '';
+    var srcName = '';
     var hhmm = s.asOf ? new Date(s.asOf).toLocaleTimeString('en-IN',{hour:'2-digit', minute:'2-digit', second:'2-digit'}) : '';
     if(!bkReady()){ txt = 'Live prices: connect a broker in Settings'; }
     else if(s.status==='loading'){ txt = 'Fetching prices…'; cls = 'stale'; }
@@ -7036,10 +7013,23 @@
   const BENCHMARK_CACHE_TTL = 12*60*60*1000;
   let benchmarkMemCache = {};
   let benchQueue = Promise.resolve();
+  let benchErr = {};
   let benchmarkVisible = { nifty50: true, midcap100: true, smallcap250: true };
   let cmpEnabled = { equity: false, roc: false };
 
-  function loadBenchmarkDiskCache(){ try{ return JSON.parse(localStorage.getItem(BENCHMARK_CACHE_KEY) || '{}'); }catch(e){ return {}; } }
+  // Older app versions saved their index data under earlier cache keys. Reuse it so the comparison
+  // lines still show (and keep showing, slightly stale) while the broker is rate-limited.
+  const BENCHMARK_LEGACY_KEYS = ['fv_benchmark_cache_v4','fv_benchmark_cache_v3','fv_benchmark_cache_v2','fv_benchmark_cache_v1','fv_benchmark_cache'];
+  function loadBenchmarkDiskCache(){
+    var c = {}; try{ c = JSON.parse(localStorage.getItem(BENCHMARK_CACHE_KEY) || '{}') || {}; }catch(e){}
+    Object.keys(BENCHMARK_TICKERS).forEach(function(k){
+      if(c[k] && c[k].points && c[k].points.length) return;
+      for(var i=0;i<BENCHMARK_LEGACY_KEYS.length;i++){
+        try{ var o = JSON.parse(localStorage.getItem(BENCHMARK_LEGACY_KEYS[i]) || 'null'); if(o && o[k] && o[k].points && o[k].points.length){ c[k] = o[k]; break; } }catch(e){}
+      }
+    });
+    return c;
+  }
   function saveBenchmarkDiskCache(c){ try{ localStorage.setItem(BENCHMARK_CACHE_KEY, JSON.stringify(c)); }catch(e){} }
 
   async function fetchBenchmarkSeries(key, attempt){
@@ -7070,7 +7060,7 @@
         disk[key] = { points:points, fetchedAt: Date.now(), symbol:symbol, source:r.source };
         saveBenchmarkDiskCache(disk);
         return points;
-      }catch(err){ lastErr = err; console.warn('Benchmark fetch failed for', key, symbol, err.message); if(bkIsRateLimit(err)){ bkStartCooldown(); break; } if(err.code==='no_proxy' || err.code==='kite_login') break; }
+      }catch(err){ lastErr = err; benchErr[key] = symbol+': '+err.message; console.warn('Benchmark fetch failed for', key, symbol, err.message); if(bkIsRateLimit(err)){ bkStartCooldown(); break; } if(err.code==='no_proxy' || err.code==='kite_login') break; }
     }
     if(!attempt && lastErr && (lastErr.code==='timeout' || lastErr.code==='network')){ await new Promise(function(r){ setTimeout(r,1500); }); return fetchBenchmarkSeries(key, 1); }
     if(lastErr && !bkIsRateLimit(lastErr)){ disk['_fail_'+key] = Date.now(); saveBenchmarkDiskCache(disk); }
@@ -7091,7 +7081,10 @@
     const run = benchQueue.then(function(){ return fetchBenchmarkSeries(key); });
     benchQueue = run.catch(function(){}).then(function(){ return new Promise(function(r){ setTimeout(r, 1500); }); });
     const pts = await run;
-    benchmarkMemCache[key] = (pts && pts.length) ? pts : 'error';
+    if(pts && pts.length){ benchmarkMemCache[key] = pts; return pts; }
+    // Rate-limited / paused: not a real failure — don't remember it, so it can be retried later.
+    if(Date.now() < bkCooldownUntil){ delete benchmarkMemCache[key]; return 'pending'; }
+    benchmarkMemCache[key] = 'error';
     return benchmarkMemCache[key];
   }
 
@@ -7263,6 +7256,7 @@
       renderComparisonSinceBox(sinceEl, seriesList, fromKey, 'shown in % — Portfolio here is Return on Capital, not ₹');
     };
     draw();
+    let anyPending = false;
 
     for(const key of Object.keys(BENCHMARK_TICKERS)){
       if(!benchmarkVisible[key]) continue;
@@ -7272,7 +7266,10 @@
       draw();
       const data = await ensureBenchmarkLoaded(key);
       if(opts.stillActive && !opts.stillActive()) return; // a newer render has taken over this chart — stop here
-      if(data==='error' || !data){
+      if(data==='pending'){
+        anyPending = true;
+        seriesList[placeholderIdx] = { key, label: cfg.label+' (waiting for data…)', color: cfg.color, points: [], visible:false };
+      } else if(data==='error' || !data){
         seriesList[placeholderIdx] = { key, label: cfg.label+(bkReady()?' (unavailable)':' (connect a broker)'), color: cfg.color, points: [], visible:false };
       } else {
         const rebased = rebaseToPercent(data, p=>p.date, p=>p.close, fromKey, toKey);
@@ -7280,6 +7277,21 @@
         seriesList[placeholderIdx] = { key, label: cfg.label+(/MOM100|HDFCSML250/.test(usedSym) ? ' (via ETF)' : ''), color: cfg.color, points: rebased, visible: true };
       }
       draw();
+    }
+    // Say why a line is missing instead of just "(unavailable)".
+    if(legendEl){
+      const why = Object.keys(BENCHMARK_TICKERS).filter(k=> benchmarkVisible[k] && (benchmarkMemCache[k]==='error') && benchErr[k]).map(k=> '<div>'+escapeHtml(BENCHMARK_TICKERS[k].label)+' — '+escapeHtml(benchErr[k])+'</div>').join('');
+      let w = legendEl.parentNode && legendEl.parentNode.querySelector('.cmp-why');
+      if(!w && why){ w = document.createElement('div'); w.className = 'cmp-why'; w.style.cssText = 'font-size:11px; color:var(--ink-faint); margin:6px 2px 0; line-height:1.5;'; legendEl.insertAdjacentElement('afterend', w); }
+      if(w) w.innerHTML = why;
+    }
+    // Some lines were held back by the rate limit — retry automatically once it clears.
+    if(anyPending && (opts._retry||0) < 8){
+      const wait = Math.max(5000, bkCooldownUntil-Date.now()+2000);
+      setTimeout(function(){
+        if(opts.stillActive && !opts.stillActive()) return;
+        renderBenchmarkComparison(chartEl, legendEl, sinceEl, portfolioPts, Object.assign({}, opts, {_retry:(opts._retry||0)+1}));
+      }, wait);
     }
   }
 
@@ -7588,6 +7600,76 @@
     return points;
   }
 
+  // ---- XIRR vs indices -------------------------------------------------------
+  // "If every deposit and withdrawal you made had gone into the index on the same
+  // day instead, what annualised return would that have been?" — the fair way to
+  // compare an account that has money moving in and out.
+  function indexPriceOnOrBefore(sorted, key){
+    let lo = 0, hi = sorted.length-1, ans = -1;
+    while(lo<=hi){ const m = (lo+hi)>>1; if(sorted[m].date<=key){ ans = m; lo = m+1; } else hi = m-1; }
+    return ans>=0 ? sorted[ans] : null;
+  }
+  function computeIndexXirr(points, flows){
+    if(!points || points.length<2 || !flows || flows.length<2) return null;
+    const sorted = points.slice().sort((a,b)=> a.date.localeCompare(b.date));
+    const real = flows.slice(0, -1);                       // last flow is today's portfolio value
+    const firstKey = todayKey(real[0].date);
+    if(sorted[0].date > firstKey && (new Date(sorted[0].date+'T00:00:00') - real[0].date) > 7*86400000) return null;   // index history starts too late
+    let units = 0;
+    real.forEach(function(f){
+      const px = indexPriceOnOrBefore(sorted, todayKey(f.date)) || sorted[0];
+      if(!px || !px.close) return;
+      units += (-f.amount)/px.close;                       // deposit (negative) buys units, withdrawal sells
+    });
+    const last = sorted[sorted.length-1];
+    if(!(units>0) || !last.close) return null;
+    const idxFlows = real.concat([{date:new Date(), amount: units*last.close}]);
+    const r = computeXIRR(idxFlows);
+    const first = indexPriceOnOrBefore(sorted, firstKey) || sorted[0];
+    return { rate: r, pointReturn: first && first.close ? (last.close/first.close-1)*100 : null, asOf: last.date };
+  }
+  let xirrIdxToken = 0, xirrIdxRetry = 0;
+  async function renderXirrIndexComparison(rate, flows){
+    const el = document.getElementById('tdXirrIdx'); if(!el) return;
+    const tok = ++xirrIdxToken;
+    if(rate===null || !flows || flows.length<2){ el.innerHTML = ''; return; }
+    const fmtP = function(v){ return v===null||v===undefined||isNaN(v) ? '—' : (v>=0?'+':'')+v.toFixed(2)+'%'; };
+    const cls = function(v){ return v===null||v===undefined||isNaN(v) ? '' : (v>=0?'pos':'neg'); };
+    const rows = { portfolio: {label:'Your portfolio', rate: rate*100, alpha:null, pr:null, note:''} };
+    const draw = function(){
+      const keys = Object.keys(BENCHMARK_TICKERS);
+      el.innerHTML = '<div class="td-card-head" style="margin-bottom:2px;"><span>XIRR vs Indices</span></div>' +
+        '<div class="td-card-sub" style="display:block; margin-bottom:8px;">Same deposits &amp; withdrawals on the same dates, invested in each index instead.</div>' +
+        '<div class="td-bd-list">' +
+        '<div class="td-bd-row"><div class="td-bd-top"><span class="td-bd-name">Your portfolio</span><span class="td-bd-pnl '+cls(rows.portfolio.rate)+'">'+fmtP(rows.portfolio.rate)+'</span></div></div>' +
+        keys.map(function(k){
+          const r = rows[k]; const label = BENCHMARK_TICKERS[k].label;
+          if(!r) return '<div class="td-bd-row"><div class="td-bd-top"><span class="td-bd-name">'+escapeHtml(label)+'</span><span class="td-bd-pnl" style="color:var(--ink-faint);">loading…</span></div></div>';
+          if(r.note) return '<div class="td-bd-row"><div class="td-bd-top"><span class="td-bd-name">'+escapeHtml(label)+'</span><span class="td-bd-pnl" style="color:var(--ink-faint);">—</span></div><div class="td-bd-meta">'+escapeHtml(r.note)+'</div></div>';
+          return '<div class="td-bd-row"><div class="td-bd-top"><span class="td-bd-name">'+escapeHtml(label)+'</span><span class="td-bd-pnl '+cls(r.rate)+'">'+fmtP(r.rate)+'</span></div>' +
+            '<div class="td-bd-meta">You vs index: <b class="'+cls(r.alpha)+'">'+(r.alpha===null?'—':(r.alpha>=0?'+':'')+r.alpha.toFixed(2)+' pts')+'</b> · index price change since your first deposit '+fmtP(r.pr)+'</div></div>';
+        }).join('') + '</div>';
+    };
+    draw();
+    let pending = false;
+    for(const k of Object.keys(BENCHMARK_TICKERS)){
+      const data = await ensureBenchmarkLoaded(k);
+      if(tok!==xirrIdxToken) return;
+      if(data==='pending'){ pending = true; rows[k] = {note:'waiting for the data limit to clear — retrying automatically'}; }
+      else if(data==='error' || !data){ rows[k] = {note: benchErr[k] ? benchErr[k] : (bkReady() ? 'index data unavailable' : 'connect a broker for index data')}; }
+      else {
+        const r = computeIndexXirr(data, flows);
+        if(!r || r.rate===null) rows[k] = {note:'not enough index history for your first deposit date'};
+        else rows[k] = {rate: r.rate*100, alpha: rate*100 - r.rate*100, pr: r.pointReturn};
+      }
+      draw();
+    }
+    if(pending && xirrIdxRetry<8){
+      xirrIdxRetry++;
+      setTimeout(function(){ if(tok===xirrIdxToken && bkPanelActive('overview')) renderXirrIndexComparison(rate, flows); }, Math.max(5000, bkCooldownUntil-Date.now()+2000));
+    } else if(!pending){ xirrIdxRetry = 0; }
+  }
+
   function renderPortfolioXirr(){
     const cardEl = document.getElementById('tdXirrCard');
     if(!cardEl) return;
@@ -7634,6 +7716,7 @@
         return `<div class="eq-tip-tk">Portfolio Value</div><div class="eq-tip-date">${escapeHtml(p.date||'')} · ${escapeHtml(evLabel)}</div><div class="eq-tip-pnl">${escapeHtml(fmtMoney(Math.round(p.v)))}</div>`;
       }
     });
+    try{ renderXirrIndexComparison(rate, flows); }catch(e){ console.warn(e); }
   }
 
   let rocCmpRenderToken = 0;
@@ -12367,8 +12450,7 @@
     el.innerHTML = needs.length ? '<div class="pl-unmapped"><div style="font-weight:700; font-size:12.5px;">Fix symbols for live prices</div><div class="bk-note">Type the exchange trading symbol (SME names often end in -SM). Optional prefix: <b>BSE:</b>.</div>' +
       needs.map(function(n){ return '<div class="pl-unmapped-row" data-map-ticker="'+escapeHtml(n.ticker)+'"><span style="font-size:12px; font-weight:700; min-width:90px;">'+escapeHtml(n.ticker)+'</span><input type="text" value="'+escapeHtml(n.cur)+'" placeholder="e.g. RELIANCE" aria-label="Symbol for '+escapeHtml(n.ticker)+'"><button class="btn primary" style="padding:7px 14px; font-size:12px;">Save</button><span class="bk-note" style="flex-basis:100%;">'+escapeHtml(n.why)+'</span></div>'; }).join('') + '</div>' : '';
     if(banner){
-      if(!bkReady()) banner.innerHTML = '<div class="bk-banner"><b>Add live prices.</b> Unrealised P&amp;L is using the last price from your imports. Connect Zerodha or Groww (Settings → Broker connection) to value open positions at the live price.<br><button class="btn primary" style="padding:7px 14px; font-size:12px;" data-goto-settings>Open broker settings</button></div>';
-      else if(bkLoginNeeded) banner.innerHTML = '<div class="bk-banner"><b>Zerodha session expired.</b> Zerodha logins reset every morning. <br><button class="btn primary" style="padding:7px 14px; font-size:12px;" data-kite-login>Connect Zerodha</button></div>';
+      if(!bkReady()) banner.innerHTML = '<div class="bk-banner"><b>Add live prices.</b> Unrealised P&amp;L is using the last price from your imports. Live data is not reachable right now, so open positions are valued at the last imported price.<br><button class="btn primary" style="padding:7px 14px; font-size:12px;" data-goto-settings>Open settings</button></div>';
       else banner.innerHTML = '';
     }
   }
@@ -12491,7 +12573,7 @@
     function useStaleOrWait(secs){
       var st = tcCache[ck];
       if(st){ s.candles = st.candles; s.source = st.source; s.synthetic = false; s.error = ''; }
-      else { s.candles = tcSynthetic(fills); s.synthetic = true; s.error = 'Groww rate limit — price history will load automatically in about '+secs+'s'; }
+      else { s.candles = tcSynthetic(fills); s.synthetic = true; s.error = 'Data limit reached — price history will load automatically in about '+secs+'s'; }
       s.loading = false; tcChromeDirty = true; tcFit(); tcPaint();
       clearTimeout(s.retryT);
       s.retryT = setTimeout(function(){ if(tcState===s && bkPanelActive('chart')) tcLoad(false); }, Math.max(2000, bkCooldownUntil-Date.now()+1500));
@@ -12680,9 +12762,9 @@
   function tcRenderBanner(){
     var el = bkEl('tcBanner'), s = tcState; if(!el) return;
     var h = '';
-    if(s.error==='noproxy') h = '<div class="bk-banner"><b>Showing only your own fills.</b> Connect a broker (Settings → Broker connection) to see the real price candles behind them.<br><button class="btn primary" style="padding:7px 14px; font-size:12px;" data-goto-settings>Open broker settings</button></div>';
+    if(s.error==='noproxy') h = '<div class="bk-banner"><b>Showing only your own fills.</b> Connect a broker (Settings → Broker connection) to see the real price candles behind them.<br><button class="btn primary" style="padding:7px 14px; font-size:12px;" data-goto-settings>Open settings</button></div>';
     else if(s.error==='nosymbol') h = '<div class="bk-banner"><b>No exchange symbol for “'+escapeHtml(s.ticker)+'”.</b> Tap <b>Symbol</b> above and enter its NSE/BSE trading symbol to load price history.</div>';
-    else if(s.error) h = '<div class="bk-banner"><b>Price history unavailable</b> — '+escapeHtml(s.error)+' Showing your own fills instead.'+(bkLoginNeeded?'<br><button class="btn primary" style="padding:7px 14px; font-size:12px;" data-kite-login>Connect Zerodha</button>':'')+'</div>';
+    else if(s.error) h = '<div class="bk-banner"><b>Price history unavailable</b> — '+escapeHtml(s.error)+' Showing your own fills instead.'+'</div>';
     el.innerHTML = h;
     var sb = bkEl('tcSymbolBtn'); if(sb) sb.textContent = s.key ? s.key : 'Set symbol';
   }
@@ -12846,150 +12928,6 @@
   }
 
   // =====================================================================
-  // ZERODHA AUTO-SYNC (today's executed trades → journal, FIFO against open lots)
-  // =====================================================================
-  var zSyncBusy = false, zAutoTimer = null;
-  function zState(){ return db.brokerSync || (db.brokerSync = {seen:[], lastAt:0, lastCloseDay:'', lastSummary:''}); }
-  function zNormTime(s){ return String(s||'').trim().replace(' ','T').slice(0,16); }
-  function zRound4(n){ return Math.round(n*10000)/10000; }
-  function zNewId(){ return 'trade_'+Date.now()+'_'+Math.random().toString(36).slice(2,7); }
-
-  // Merge the partial fills of one order into a single leg.
-  function zMergeOrders(legs){
-    var m = {}, order = [];
-    legs.forEach(function(l){
-      var k = l.symbol.toUpperCase()+'|'+(l.orderId||l.tradeId)+'|'+l.side;
-      if(!m[k]){ m[k] = {symbol:l.symbol.toUpperCase(), side:l.side, qty:0, val:0, time:zNormTime(l.time), orderId:l.orderId, tradeId:l.tradeId, product:l.product}; order.push(k); }
-      m[k].qty += l.qty; m[k].val += l.qty*l.price; var t = zNormTime(l.time); if(t && t<m[k].time) m[k].time = t;
-    });
-    return order.map(function(k){ var x = m[k]; x.price = Math.round(x.val/x.qty*10000)/10000; return x; });
-  }
-
-  // Already in the journal (e.g. you imported today's tradebook earlier)?
-  function zLegAlreadyBooked(leg){
-    var tm = leg.time, sym = leg.symbol;
-    return (db.trades||[]).some(function(t){
-      if((t.ticker||'').toUpperCase()!==sym) return false;
-      if((t.entryDT||'').slice(0,16)===tm && Math.abs(parseFloat(t.entryPrice)-leg.price)<0.006) return true;
-      if((t.exitDT||'').slice(0,16)===tm && Math.abs(parseFloat(t.exitPrice)-leg.price)<0.006) return true;
-      return false;
-    });
-  }
-
-  function zCloseInto(t, sl){
-    var dir = t.direction==='short' ? 'short' : 'long', a = computeAutoTradeValues(t.entryPrice, sl.price, sl.qty, t.slPrice, dir);
-    t.qty = sl.qty; t.posSize = a.posSize; t.exitDT = sl.time; t.exitPrice = sl.price; t.pnl = a.pnl; t.rMultiple = a.rMultiple;
-    delete t.markPrice; delete t.markDate; delete t.unrealizedPnl; delete t.liveMark;
-  }
-  function zClosedCopy(t, sl, partial){
-    var dir = t.direction==='short' ? 'short' : 'long', a = computeAutoTradeValues(t.entryPrice, sl.price, sl.qty, t.slPrice, dir);
-    var c = Object.assign({}, t, {id:zNewId(), qty:sl.qty, posSize:a.posSize, exitDT:sl.time, exitPrice:sl.price, pnl:a.pnl, rMultiple:a.rMultiple, screenshot:null, partialExit:true, parentTradeId:t.id});
-    delete c.markPrice; delete c.markDate; delete c.unrealizedPnl; delete c.liveMark; delete c.partiallyExited;
-    return c;
-  }
-  function zOpenObj(lot, sym){
-    return {id:zNewId(), ticker:sym, date:lot.time.slice(0,10), timeframe: lot.product==='MIS' ? 'Intraday' : 'Swing', direction:lot.dir, entryDT:lot.time, entryPrice:lot.price, qty:zRound4(lot.qty), posSize:bkRound2(lot.price*lot.qty), source:'zerodha-sync'};
-  }
-
-  function zApplyLegs(legs){
-    var res = {closed:0, opened:0, reduced:0}, bySym = {}, add = [];
-    legs.forEach(function(l){ (bySym[l.symbol] = bySym[l.symbol]||[]).push(l); });
-    Object.keys(bySym).forEach(function(sym){
-      var existing = (db.trades||[]).filter(function(t){ return !t.exitDT && (t.ticker||'').toUpperCase()===sym && parseFloat(t.qty)>0 && !isNaN(parseFloat(t.entryPrice)); })
-        .sort(function(a,b){ return (a.entryDT||a.date||'').localeCompare(b.entryDT||b.date||''); });
-      var mk = function(t){ return {trade:t, qty:parseFloat(t.qty), price:parseFloat(t.entryPrice), time:t.entryDT||((t.date||todayKey())+'T09:15'), dir:t.direction==='short'?'short':'long', slices:[]}; };
-      var longs = existing.filter(function(t){ return t.direction!=='short'; }).map(mk), shorts = existing.filter(function(t){ return t.direction==='short'; }).map(mk);
-      var all = longs.concat(shorts);
-      bySym[sym].sort(function(a,b){ return a.time.localeCompare(b.time); }).forEach(function(leg){
-        var qty = leg.qty, isBuy = leg.side==='buy', against = isBuy ? shorts : longs;
-        while(qty>0.0001 && against.length){
-          var lot = against[0], m = Math.min(qty, lot.qty);
-          lot.slices.push({qty:zRound4(m), price:leg.price, time:leg.time}); lot.qty -= m; qty -= m;
-          if(lot.qty<=0.0001) against.shift();
-        }
-        if(qty>0.0001){ var nl = {trade:null, qty:qty, price:leg.price, time:leg.time, dir:isBuy?'long':'short', slices:[], product:leg.product}; (isBuy?longs:shorts).push(nl); all.push(nl); }
-      });
-      all.forEach(function(lot){
-        var remaining = lot.qty>0.0001 ? lot.qty : 0, sl = lot.slices;
-        if(!sl.length){ if(!lot.trade){ add.push(zOpenObj(lot, sym)); res.opened++; } return; }
-        if(lot.trade){
-          var t = lot.trade;
-          if(!remaining){ zCloseInto(t, sl[0]); res.closed++; for(var i=1;i<sl.length;i++){ add.push(zClosedCopy(t, sl[i])); res.closed++; } }
-          else {
-            sl.forEach(function(s){ add.push(zClosedCopy(t, s)); res.closed++; });
-            t.qty = zRound4(remaining); t.posSize = bkRound2(parseFloat(t.entryPrice)*remaining); t.partiallyExited = true; res.reduced++;
-          }
-        } else {
-          sl.forEach(function(s){
-            var o = buildTradeObject({ticker:sym, direction:lot.dir, entryDT:lot.time, entryPrice:lot.price, exitDT:s.time, exitPrice:s.price, qty:s.qty});
-            o.source = 'zerodha-sync'; add.push(o); res.closed++;
-          });
-          if(remaining){ add.push(zOpenObj(Object.assign({}, lot, {qty:remaining}), sym)); res.opened++; }
-        }
-      });
-    });
-    add.forEach(function(t){ db.trades.push(t); });
-    return res;
-  }
-
-  async function zSyncNow(){
-    if(zSyncBusy) return null;
-    zSyncBusy = true;
-    try{
-      var r = await bkGet('/trades'), st = zState(), seen = new Set(st.seen||[]);
-      var legs = (r.trades||[]).filter(function(l){ return l.symbol && l.qty>0 && l.price>0; });
-      var fresh = zMergeOrders(legs.filter(function(l){ return !seen.has(l.tradeId); }));
-      var skipped = 0, apply = [];
-      fresh.forEach(function(l){ if(zLegAlreadyBooked(l)) skipped++; else apply.push(l); });
-      var res = zApplyLegs(apply);
-      legs.forEach(function(l){ seen.add(l.tradeId); });
-      st.seen = Array.from(seen).slice(-3000); st.lastAt = Date.now();
-      var msg;
-      if(!legs.length) msg = 'No Zerodha trades today yet.';
-      else if(!fresh.length) msg = 'Nothing new — all '+legs.length+' of today\'s fills were already synced.';
-      else msg = 'Synced '+legs.length+' fill'+(legs.length===1?'':'s')+': '+res.closed+' trade'+(res.closed===1?'':'s')+' closed, '+res.opened+' position'+(res.opened===1?'':'s')+' opened'+(res.reduced?', '+res.reduced+' reduced':'')+(skipped?'; '+skipped+' already in your journal':'')+'.';
-      st.lastSummary = msg;
-      if(fresh.length){ saveDB(); renderAll(); }
-      bkRefreshQuotes();
-      return {msg:msg, res:res, skipped:skipped, fills:legs.length, changed:!!(res.closed||res.opened||res.reduced)};
-    }catch(e){
-      if(e.code==='kite_login') bkLoginNeeded = true;
-      throw e;
-    }finally{ zSyncBusy = false; }
-  }
-
-  function zPaintResult(text, isErr){ var el = bkEl('zSyncResult'); if(el){ el.textContent = text||''; el.className = 'sync-result'+(isErr?' err':''); } }
-  async function zRefreshTag(){
-    var tag = bkEl('zSyncTag'), btn = bkEl('zSyncBtn'); if(!tag) return;
-    if(!bkReady()){ tag.textContent = 'not set up'; if(btn) btn.disabled = false; zPaintResult('Add your broker proxy in Settings → Broker connection first.', false); return; }
-    try{
-      var s = await bkGet('/status', null, 12000); bkStatusCache = s;
-      tag.textContent = !s.kite.configured ? 'Zerodha not configured' : (s.kite.connected ? 'connected' : 'login needed');
-      var st = zState(); if(st.lastAt) zPaintResult('Last sync '+new Date(st.lastAt).toLocaleString('en-IN',{day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})+' — '+(st.lastSummary||''), false);
-    }catch(e){ tag.textContent = 'unreachable'; zPaintResult(e.message, true); }
-  }
-  async function zSyncClick(){
-    var btn = bkEl('zSyncBtn'); if(btn){ btn.disabled = true; btn.textContent = 'Syncing…'; }
-    zPaintResult('Fetching today\'s trades…', false);
-    try{ var r = await zSyncNow(); if(r){ zPaintResult(r.msg, false); if(r.changed) showToast('Zerodha sync done.', 'success'); } }
-    catch(e){ zPaintResult(e.message+(e.code==='kite_login' ? ' Use “Connect Zerodha” in Settings → Broker connection.' : ''), true); }
-    finally{ if(btn){ btn.disabled = false; btn.textContent = 'Sync now'; } zRefreshTag(); }
-  }
-
-  function zAutoTick(){
-    if(!bkCfg().autoSync || !bkReady() || zSyncBusy || bkLoginNeeded) return;
-    var d = bkIstNow(), dow = d.getUTCDay(); if(dow===0 || dow===6) return;
-    var mins = d.getUTCHours()*60+d.getUTCMinutes(), st = zState();
-    var istDay = d.toISOString().slice(0,10);
-    var due = false;
-    if(mins>=560 && mins<=935 && Date.now()-(st.lastAt||0) > 15*60000) due = true;                 // 09:20–15:35 IST, every 15 min
-    if(mins>=940 && st.lastCloseDay!==istDay) due = true;                                           // once after close
-    if(!due) return;
-    zSyncNow().then(function(r){ if(mins>=940) zState().lastCloseDay = istDay; if(r && r.changed) showToast('Zerodha trades synced: '+r.msg, 'success'); }).catch(function(e){ if(e.code!=='kite_login') console.warn('auto-sync', e.message); });
-  }
-  function zStartAuto(){ if(zAutoTimer) return; zAutoTimer = setInterval(zAutoTick, 60000); setTimeout(zAutoTick, 4000); }
-
-  // =====================================================================
   // XLSX: find the header row wherever it is, in any sheet
   // =====================================================================
   var XLSX_HEADER_HINTS = (function(){
@@ -13026,50 +12964,27 @@
   // UI wiring: settings card, panel activation, delegated clicks, startup
   // =====================================================================
   function bkRenderStatusList(s, err){
-    var el = bkEl('bkStatusList'), kiteBtn = bkEl('bkConnectKiteBtn'); if(!el) return;
-    if(err){ el.innerHTML = '<div class="bk-status-item"><span class="nm">Proxy</span><span class="st bad">'+escapeHtml(err)+'</span></div>'; if(kiteBtn) kiteBtn.style.display = 'none'; return; }
-    if(!s){ el.innerHTML = ''; if(kiteBtn) kiteBtn.style.display = 'none'; return; }
-    var item = function(nm, st, cls){ return '<div class="bk-status-item"><span class="nm">'+nm+'</span><span class="st '+cls+'">'+st+'</span></div>'; };
-    var h = item('Proxy', 'reachable'+(s.persistent ? '' : ' · ⚠ no KV bound (Zerodha login won\'t persist)'), s.persistent ? 'ok' : 'warn');
-    h += item('Zerodha', !s.kite.configured ? 'not configured on proxy' : (s.kite.connected ? 'connected until ~6 AM' : 'login needed today'), !s.kite.configured ? 'warn' : (s.kite.connected ? 'ok' : 'bad'));
-    h += item('Groww', s.groww.configured ? 'ready' : 'not configured on proxy', s.groww.configured ? 'ok' : 'warn');
-    el.innerHTML = h;
-    if(kiteBtn) kiteBtn.style.display = (s.kite.configured && !s.kite.connected) ? '' : 'none';
-    bkLoginNeeded = s.kite.configured && !s.kite.connected && !s.groww.configured;
+    var el = bkEl('bkStatusList'); if(!el) return;
+    if(err){ el.innerHTML = '<div class="bk-status-item"><span class="nm">Live data</span><span class="st bad">'+escapeHtml(err)+'</span></div>'; return; }
+    if(!s){ el.innerHTML = ''; return; }
+    var ok = !!(s.groww && s.groww.configured);
+    el.innerHTML = '<div class="bk-status-item"><span class="nm">Live data</span><span class="st '+(ok?'ok':'warn')+'">'+(ok?'ready':'not configured')+'</span></div>';
+    bkLoginNeeded = false;
   }
   async function bkTestConnection(){
     var el = bkEl('bkStatusList'); if(el) el.innerHTML = '<div class="bk-status-item"><span class="nm">Checking…</span></div>';
     try{ var s = await bkGet('/status', null, 15000); bkStatusCache = s; bkRenderStatusList(s); return s; }
     catch(e){ bkRenderStatusList(null, e.message); return null; }
   }
-  async function bkKiteLogin(){
-    try{
-      var r = await bkGet('/kite/login-url', {'return': location.protocol==='file:' ? '' : location.href.split('#')[0]});
-      location.href = r.url;
-    }catch(e){ showToast(e.message, 'error'); }
-  }
   function bkInitSettingsUI(){
-    var c = bkCfg(); if(!bkEl('bkUrl')) return;
-    bkEl('bkUrl').value = c.url; bkEl('bkKey').value = c.appKey; bkEl('bkPref').value = c.pref;
-    bkEl('bkLiveToggle').checked = c.livePrices !== false; bkEl('bkAutoSyncToggle').checked = !!c.autoSync;
-    var zt = bkEl('zAutoSyncToggle'); if(zt) zt.checked = !!c.autoSync;
+    var c = bkCfg(); if(!bkEl('bkLiveToggle')) return;
+    bkEl('bkLiveToggle').checked = c.livePrices !== false;
     bkEl('bkSaveBtn').addEventListener('click', async function(){
-      c.url = bkEl('bkUrl').value.trim().replace(/\/+$/,''); c.appKey = bkEl('bkKey').value.trim(); c.pref = bkEl('bkPref').value;
       bkSaveCfg(); bkResolveTried = {}; tcCache = {};
-      if(!bkReady()){ bkRenderStatusList(null, 'Enter both the proxy URL and the app key.'); return; }
       var s = await bkTestConnection();
-      if(s){ showToast('Broker proxy connected.', 'success'); bkResolveUnmapped().then(function(){ bkRefreshQuotes(); }); try{ renderTradeDashboard(); }catch(e){} }
-    });
-    bkEl('bkClearBtn').addEventListener('click', function(){
-      if(!confirm('Remove the broker proxy from this device? Live prices, benchmarks and sync will stop until you add it again.')) return;
-      c.url = ''; c.appKey = ''; c.autoSync = false; bkSaveCfg(); bkEl('bkUrl').value = ''; bkEl('bkKey').value = ''; bkEl('bkAutoSyncToggle').checked = false;
-      liveQuotes = {}; benchmarkMemCache = {}; bkRenderStatusList(null); bkSetLive('off'); showToast('Broker removed from this device.');
+      if(s){ showToast('Live data connected.', 'success'); bkResolveUnmapped().then(function(){ bkRefreshQuotes(); }); try{ renderTradeDashboard(); }catch(e){} }
     });
     bkEl('bkLiveToggle').addEventListener('change', function(e){ c.livePrices = e.target.checked; bkSaveCfg(); if(c.livePrices) bkMaybeRefresh(); });
-    var setAuto = function(v){ c.autoSync = v; bkSaveCfg(); bkEl('bkAutoSyncToggle').checked = v; if(zt) zt.checked = v; if(v) zStartAuto(); };
-    bkEl('bkAutoSyncToggle').addEventListener('change', function(e){ setAuto(e.target.checked); });
-    if(zt) zt.addEventListener('change', function(e){ setAuto(e.target.checked); });
-    bkEl('bkConnectKiteBtn').addEventListener('click', bkKiteLogin);
     if(bkReady()) bkTestConnection();
   }
 
@@ -13085,7 +13000,6 @@
     if((t = e.target.closest('[data-chart-ticker]'))){ e.preventDefault(); tcOpen(t.getAttribute('data-chart-ticker')); return; }
     if((t = e.target.closest('[data-chart-trade]'))){ e.stopPropagation(); tcOpen(t.getAttribute('data-chart-trade')); return; }
     if(e.target.closest('[data-goto-settings]')){ switchToView('settings', 'brokerCard'); return; }
-    if(e.target.closest('[data-kite-login]')){ bkKiteLogin(); return; }
     var mapBtn = e.target.closest('.pl-unmapped-row button');
     if(mapBtn){
       var row = mapBtn.closest('[data-map-ticker]'), val = row.querySelector('input').value.trim().toUpperCase();
@@ -13101,7 +13015,6 @@
   });
   var plRefreshEl = bkEl('plRefreshBtn');
   if(plRefreshEl) plRefreshEl.addEventListener('click', function(){ if(!bkReady()){ switchToView('settings','brokerCard'); return; } bkRefreshQuotes(); });
-  var zBtnEl = bkEl('zSyncBtn'); if(zBtnEl) zBtnEl.addEventListener('click', zSyncClick);
 
   // drag & drop for the import file zone
   (function(){
@@ -13111,14 +13024,8 @@
     dz.addEventListener('drop', function(e){ var f = e.dataTransfer && e.dataTransfer.files; if(f && f.length){ try{ inp.files = f; }catch(err){} inp.dispatchEvent(new Event('change', {bubbles:true})); } });
   })();
 
-  // Back from the Zerodha login redirect?
-  if(/broker=kite-ok/.test(location.hash)){
-    try{ history.replaceState(null, '', location.href.split('#')[0]); }catch(e){}
-    bkLoginNeeded = false; setTimeout(function(){ showToast('Zerodha connected for today.', 'success'); bkRefreshQuotes(); bkTestConnection(); }, 600);
-  }
   bkInitSettingsUI();
   bkStartLoop();
-  if(bkCfg().autoSync && bkReady()) zStartAuto();
   setTimeout(function(){
     if(bkReady() && bkCfg().livePrices && appSettings.isTrader){ bkResolveUnmapped().then(function(){ bkRefreshQuotes(); }); }
     else bkPaintBadges();
