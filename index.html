@@ -3618,8 +3618,12 @@
       <div class="card" id="brokerCard">
         <div class="card-title">📡 Live market data <span style="font-weight:500; color:var(--ink-faint); font-size:11px;">· prices, charts &amp; index comparison</span></div>
         <div class="toggle-row">
-          <div><div class="toggle-label">📈 Live prices</div><div class="toggle-sub">Refresh open-position prices every 5 seconds while the market is open and the Trades tab is showing</div></div>
+          <div><div class="toggle-label">📈 Live prices</div><div class="toggle-sub">Refresh open-position prices automatically while the market is open and the Trades tab is showing</div></div>
           <label class="switch"><input type="checkbox" id="bkLiveToggle"><span class="switch-track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div><div class="toggle-label">🔒 Refresh every 60 seconds</div><div class="toggle-sub">Keeps within the data limit: prices update by themselves once a minute and can't be refreshed by hand — trying shows a rate-limit message. Turn off for 5-second updates and manual refresh.</div></div>
+          <label class="switch"><input type="checkbox" id="bkLockToggle"><span class="switch-track"></span></label>
         </div>
         <div class="bk-status-list" id="bkStatusList"></div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -6872,13 +6876,25 @@
     return ms; }
   var bkResumeTimer = 0;
   // Tap the price badge to retry right now (clears any rate-limit pause).
+  // Refresh policy: by default prices refresh by themselves every 60 s and users can't force an
+  // update; trying to shows a rate-limit message. Switch the lock off in Settings for 5 s refresh.
+  function bkLocked(){ return bkCfg().lockRefresh !== false; }
+  function bkRefreshMs(){ return bkLocked() ? 60000 : 5000; }
+  function bkManualRefresh(){
+    if(bkLocked()){
+      var wait = Math.max(0, Math.ceil((bkRefreshMs()-(Date.now()-bkLastAttempt))/1000));
+      showToast('Rate limit reached — prices update automatically every 60 seconds.'+(wait?' Next update in '+wait+'s.':''), 'error');
+      return false;
+    }
+    return bkForceRefresh();
+  }
   function bkForceRefresh(){ bkCooldownUntil = 0; bkRateStrikes = 0; try{ localStorage.removeItem('fv_bk_cooldown'); }catch(e){} bkLastAttempt = 0; return bkRefreshQuotes(); }
-  document.addEventListener('click', function(e){ var b = e.target.closest && e.target.closest('.bk-live-badge'); if(b && bkReady()) bkForceRefresh(); });
+  document.addEventListener('click', function(e){ var b = e.target.closest && e.target.closest('.bk-live-badge'); if(b && bkReady()) bkManualRefresh(); });
   var bkStatusCache = null, bkLoginNeeded = false;
 
   function bkCfg(){
     if(bkCfgObj) return bkCfgObj;
-    var d = {url:BK_FIXED_URL, appKey:BK_FIXED_KEY, pref:'groww', livePrices:true};
+    var d = {url:BK_FIXED_URL, appKey:BK_FIXED_KEY, pref:'groww', livePrices:true, lockRefresh:true};
     try{ bkCfgObj = Object.assign(d, JSON.parse(localStorage.getItem(BK_CFG_KEY)||'{}')); }catch(e){ bkCfgObj = d; }
     bkCfgObj.url = BK_FIXED_URL; bkCfgObj.appKey = BK_FIXED_KEY; bkCfgObj.pref = 'groww'; delete bkCfgObj.autoSync;
     return bkCfgObj;
@@ -6999,13 +7015,13 @@
     var hhmm = s.asOf ? new Date(s.asOf).toLocaleTimeString('en-IN',{hour:'2-digit', minute:'2-digit', second:'2-digit'}) : '';
     if(!bkReady()){ txt = 'Live prices: connect a broker in Settings'; }
     else if(s.status==='loading'){ txt = 'Fetching prices…'; cls = 'stale'; }
-    else if(s.status==='err'){ txt = 'Price feed: '+(s.msg||'error')+(hhmm?' · last update '+hhmm:'')+' · tap to retry'; cls = 'err'; }
+    else if(s.status==='err'){ txt = 'Price feed: '+(s.msg||'error')+(hhmm?' · last update '+hhmm:'')+(bkLocked()?'':' · tap to retry'); cls = 'err'; }
     else if(s.status==='ok'){ if(bkMarketOpen()){ txt = 'LIVE · '+srcName+' · '+hhmm; cls = 'live'; } else { txt = 'Market closed · last price · '+srcName+' · '+hhmm; cls = 'stale'; } }
     else if(s.status==='idle'){ txt = s.msg || 'No open positions to price'; }
     else { txt = 'Live prices off'; }
     ['plLiveBadge','tcLiveBadge','pfLiveBadge'].forEach(function(id){
       var el = bkEl(id); if(!el) return;
-      el.className = 'bk-live-badge '+cls; el.style.cursor = 'pointer'; el.querySelector('.bk-live-text').textContent = txt; el.title = (s.msg || '') + ' — tap to refresh prices now';
+      el.className = 'bk-live-badge '+cls; el.style.cursor = 'pointer'; el.querySelector('.bk-live-text').textContent = txt; el.title = bkLocked() ? 'Prices update automatically every 60 seconds' : ((s.msg || '') + ' — tap to refresh prices now');
     });
   }
 
@@ -7046,7 +7062,7 @@
     if(!bkReady() || !bkCfg().livePrices) { bkPaintBadges(); return; }
     if(Date.now() < bkCooldownUntil){ bkPaintBadges(); return; }
     if(liveState.status==='err' && Date.now()-bkLastAttempt < 30000) return;
-    var age = Date.now()-(liveState.asOf||0), limit = bkMarketOpen() ? 5000 : 300000;
+    var age = Date.now()-(liveState.asOf||0), limit = bkMarketOpen() ? bkRefreshMs() : 300000;
     if(liveState.status!=='ok' || age>limit) bkRefreshQuotes();
   }
   function bkLiveDependents(){
@@ -7058,9 +7074,10 @@
   function bkStartLoop(){
     if(liveTimer) return;
     liveTimer = setInterval(function(){
-      if(document.hidden || !bkReady() || !bkCfg().livePrices || !bkTradesVisible()) return;
-      if(bkMarketOpen()) bkRefreshQuotes();
-    }, 5000);
+      if(document.hidden || !bkReady() || !bkCfg().livePrices || !bkTradesVisible() || !bkMarketOpen()) return;
+      if(Date.now() < bkCooldownUntil) return;
+      if(Date.now()-bkLastAttempt >= bkRefreshMs()) bkRefreshQuotes();
+    }, 1000);
     document.addEventListener('visibilitychange', function(){ if(!document.hidden && bkTradesVisible()) bkMaybeRefresh(); });
   }
 
@@ -13084,7 +13101,7 @@
       tcLoad();
     });
     bkEl('tcRange').addEventListener('click', function(e){ var b = e.target.closest('[data-rg]'); if(!b) return; tcState.range = b.dataset.rg; tcSyncChips(); tcLoad(); });
-    bkEl('tcReloadBtn').addEventListener('click', function(){ bkRefreshQuotes(); tcLoad(true); });
+    bkEl('tcReloadBtn').addEventListener('click', function(){ if(bkLocked()){ bkManualRefresh(); return; } bkRefreshQuotes(); tcLoad(true); });
     bkEl('tcSymbolBtn').addEventListener('click', function(){
       if(!tcState.ticker) return;
       var cur = tcState.key || '', v = prompt('Exchange symbol for “'+tcState.ticker+'” (e.g. RELIANCE, BSE:RELIANCE, ABC-SM):', cur.replace(/^NSE:/,''));
@@ -13164,6 +13181,8 @@
   function bkInitSettingsUI(){
     var c = bkCfg(); if(!bkEl('bkLiveToggle')) return;
     bkEl('bkLiveToggle').checked = c.livePrices !== false;
+    bkEl('bkLockToggle').checked = c.lockRefresh !== false;
+    bkEl('bkLockToggle').addEventListener('change', function(e){ c.lockRefresh = e.target.checked; bkSaveCfg(); bkPaintBadges(); showToast(c.lockRefresh ? 'Prices will refresh every 60 seconds.' : 'Prices will refresh every 5 seconds; manual refresh is allowed.'); });
     bkEl('bkSaveBtn').addEventListener('click', async function(){
       bkSaveCfg(); bkResolveTried = {}; tcCache = {};
       var s = await bkTestConnection();
@@ -13199,7 +13218,7 @@
     plToggleEl.querySelectorAll('.eq-range-btn').forEach(function(x){ x.classList.toggle('on', x===b); }); renderPnlPanel();
   });
   var plRefreshEl = bkEl('plRefreshBtn');
-  if(plRefreshEl) plRefreshEl.addEventListener('click', function(){ if(!bkReady()){ switchToView('settings','brokerCard'); return; } bkRefreshQuotes(); });
+  if(plRefreshEl) plRefreshEl.addEventListener('click', function(){ if(!bkReady()){ switchToView('settings','brokerCard'); return; } bkManualRefresh(); });
 
   // drag & drop for the import file zone
   (function(){
