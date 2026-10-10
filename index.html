@@ -1520,8 +1520,20 @@
   .td-hero-value{ font-family:'Sora'; font-size:32px; font-weight:800; margin-top:6px; letter-spacing:-0.01em; }
   .td-hero-value.pos{ color: var(--teal); }
   .td-hero-value.neg{ color: var(--rose); }
-  .td-hero-stats-row{ display:flex; gap:10px; margin-top:16px; padding-top:16px; border-top:1px dashed var(--line); flex-wrap:wrap; }
-  .td-hero-stat{ flex:1; min-width:126px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm); padding:9px 12px; }
+  .td-hero-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:14px 24px; flex-wrap:wrap; }
+  .td-hero-chips{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding-top:4px; }
+  .td-chip{ display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:999px; background:var(--surface); border:1px solid var(--line); font-size:11.5px; font-weight:600; color:var(--ink-dim); white-space:nowrap; }
+  .td-chip b{ font-family:'IBM Plex Mono'; font-weight:700; color:var(--ink); }
+  .td-chip.pos b{ color:var(--teal); } .td-chip.neg b{ color:var(--rose); }
+  .td-hero-stats-row{ display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-top:16px; padding-top:16px; border-top:1px dashed var(--line); }
+  @media (min-width:560px){ .td-hero-stats-row{ grid-template-columns:repeat(3,1fr); } }
+  @media (min-width:1000px){ .td-hero-stats-row{ grid-template-columns:repeat(6,1fr); } }
+  #tdOverviewStats{ grid-template-columns:repeat(2,1fr); }
+  @media (min-width:640px){ #tdOverviewStats{ grid-template-columns:repeat(4,1fr); } }
+  #tdOverviewStats .td-stat-card{ padding:14px 16px 13px; }
+  #tdOverviewStats .td-stat-sub{ font-size:10.5px; color:var(--ink-faint); margin-top:4px; }
+  #tdOverviewStats .td-stat-val{ font-size:19px; white-space:nowrap; }
+  .td-hero-stat{ min-width:0; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm); padding:9px 12px; }
   .td-hero-stat-lbl{ font-size:10px; color:var(--ink-faint); font-weight:600; }
   .td-hero-stat-val{ font-family:'IBM Plex Mono'; font-size:14px; font-weight:700; margin-top:3px; }
   .td-hero-stat-val.pos{ color: var(--teal); }
@@ -3606,7 +3618,7 @@
       <div class="card" id="brokerCard">
         <div class="card-title">📡 Live market data <span style="font-weight:500; color:var(--ink-faint); font-size:11px;">· prices, charts &amp; index comparison</span></div>
         <div class="toggle-row">
-          <div><div class="toggle-label">📈 Live prices</div><div class="toggle-sub">Refresh open-position prices about every 45 s while the market is open and the Trades tab is showing</div></div>
+          <div><div class="toggle-label">📈 Live prices</div><div class="toggle-sub">Refresh open-position prices every 5 seconds while the market is open and the Trades tab is showing</div></div>
           <label class="switch"><input type="checkbox" id="bkLiveToggle"><span class="switch-track"></span></label>
         </div>
         <div class="bk-status-list" id="bkStatusList"></div>
@@ -6315,7 +6327,7 @@
       const pct = (n/base)*100;
       return (pct>=0?'+':'')+pct.toFixed(2)+'%';
     }
-    return (n>=0?'+':'')+Math.round(n);
+    return (n>=0?'+':'-')+Math.abs(Math.round(n)).toLocaleString('en-IN');
   }
   function fmtMoney(n){
     if(appSettings.hideAmounts){
@@ -6336,7 +6348,7 @@
       if(!base) return '-••%';
       return '-'+((v/base)*100).toFixed(2)+'%';
     }
-    return '-'+Math.round(v);
+    return '-'+Math.round(v).toLocaleString('en-IN');
   }
   // Shared compact-number formatter for chart bar labels (P&L by Month, P&L by
   // Weekday). Previously each chart had its own local fmtCompact() that always
@@ -6666,6 +6678,19 @@
       if(rangeEl) rangeEl.textContent = '';
       return;
     }
+    // redraw crisply whenever the container width changes (rotation, sidebar toggle…)
+    containerEl._eqArgs = {rangeEl: rangeEl, chronoTrades: chronoTrades, opts: opts};
+    if(!containerEl._eqRO && typeof ResizeObserver!=='undefined'){
+      let lastW = 0;
+      containerEl._eqRO = new ResizeObserver(function(){
+        requestAnimationFrame(function(){
+          const wn = Math.round(containerEl.clientWidth||0);
+          if(wn && Math.abs(wn-lastW)>24 && containerEl._eqArgs){ lastW = wn; const a = containerEl._eqArgs; renderEquityCurveSVG(containerEl, a.rangeEl, a.chronoTrades, a.opts); }
+        });
+      });
+      containerEl._eqRO.observe(containerEl);
+    }
+
     let running=0, peak=0, peakIdxSoFar=0;
     const pts = [{y:0, peak:0, peakIdx:0, pnl:0, label:'Start', ticker:'', fy:null}];
     chronoTrades.forEach(t=>{
@@ -6674,103 +6699,145 @@
       if(running>=peak){ peak = running; peakIdxSoFar = pts.length; }
       pts.push({ y:running, peak, peakIdx:peakIdxSoFar, pnl, label:tradeBasisDate(t), ticker:t.ticker||'', fy: opts.fyDividers ? fyKeyForDate(tradeBasisDate(t)) : null });
     });
+    const n = pts.length;
 
-    // Peak/Bottom are a matched pair: Bottom is the point of maximum
-    // drawdown, and Peak is the specific running-high it drew down from —
-    // not just the highest point anywhere on the curve. Using the curve's
-    // global high independently of the drawdown trough could label a Peak
-    // that isn't actually the one the Bottom fell from (e.g. an early, sharp
-    // dip off a lower local high, followed by later new highs with only a
-    // mild pullback) — pairing them off the same running peak keeps Peak
-    // and Bottom causally and chronologically consistent.
-    let peakIdx=0, troughIdx=0, maxDD=0;
-    pts.forEach((p,i)=>{ const dd=p.peak-p.y; if(dd>maxDD){ maxDD=dd; troughIdx=i; peakIdx=p.peakIdx; } });
+    // Three separate, unambiguous things are marked:
+    //  • Peak   = the highest cumulative P&L ever reached (latest time it was hit)
+    //  • Low    = the lowest cumulative P&L ever reached
+    //  • Max DD = the single worst fall from a running high to the lowest point after it
+    let hiV=-Infinity, hiI=0, loV=Infinity, loI=0;
+    pts.forEach((p,i)=>{ if(p.y>=hiV){ hiV=p.y; hiI=i; } if(p.y<loV){ loV=p.y; loI=i; } });
+    const showHi = hiI>0 && hiV>0, showLo = loI>0 && loV<0;
+    let ddPeakI=0, ddTroughI=0, maxDD=0;
+    pts.forEach((p,i)=>{ const dd=p.peak-p.y; if(dd>maxDD){ maxDD=dd; ddTroughI=i; ddPeakI=p.peakIdx; } });
 
-    const w=640, h=opts.height||190, padL=6, padR=6, padT=18, padB=6;
+    const w = Math.max(300, Math.round(containerEl.clientWidth || 640));
+    const h = Math.max(opts.height||0, w<520 ? 230 : 280);
+    const padL = 50, padR = 66, padT = 22, padB = 26;
+    const plotW = w-padL-padR, plotH = h-padT-padB;
     const ys = pts.map(p=>p.y);
-    const minY = Math.min(0,...ys), maxY = Math.max(0,...ys), spanY=(maxY-minY)||1;
-    const xFor = i => padL + (i/(pts.length-1))*(w-padL-padR);
-    const yFor = v => padT + (1-((v-minY)/spanY))*(h-padT-padB);
-    const zeroY = yFor(0).toFixed(1);
+    let minY = Math.min(0,...ys), maxY = Math.max(0,...ys);
+    const padY = ((maxY-minY)||1)*0.10; minY -= padY; maxY += padY;
+    const spanY = (maxY-minY)||1;
+    const xFor = i => padL + (i/(n-1))*plotW;
+    const yFor = v => padT + (1-((v-minY)/spanY))*plotH;
+    const zeroY = yFor(0);
+    const lineColor = running>=0 ? 'var(--teal)' : 'var(--rose)';
+
+    // grid + left axis
+    const ticks = cmpNiceTicks(minY, maxY, h<250 ? 4 : 5);
+    const grid = ticks.map(v=>{
+      const y = yFor(v).toFixed(1);
+      return `<line x1="${padL}" x2="${w-padR}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-width="1" opacity="${Math.abs(v)<1e-9?0:0.5}"/>`+
+        `<text x="${padL-8}" y="${(+y+3.5).toFixed(1)}" text-anchor="end" font-size="10" font-family="IBM Plex Mono" fill="var(--ink-faint)">${Math.abs(v)<1e-9?'0':escapeHtml(fmtCompactPnl(v).replace(/^\+/,''))}</text>`;
+    }).join('');
+    // x axis: dates at evenly spaced trade positions
+    const nX = w<520 ? 4 : 6; let xl = '';
+    const dLbl = ds => { const d = new Date(ds+'T00:00:00'); return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-IN', {day:'numeric', month:'short'}); };
+    for(let k=0;k<nX;k++){
+      const i = Math.round((n-1)*(k/(nX-1))); if(i===0 && pts[1]) { /* first label = first trade date */ }
+      const lbl = dLbl(pts[Math.max(1,i)].label); if(!lbl) continue;
+      xl += `<text x="${xFor(i).toFixed(1)}" y="${h-8}" text-anchor="${k===0?'start':(k===nX-1?'end':'middle')}" font-size="10" font-family="Inter" fill="var(--ink-faint)">${escapeHtml(lbl)}</text>`;
+    }
 
     const linePts = pts.map((p,i)=> xFor(i).toFixed(1)+','+yFor(p.y).toFixed(1)).join(' ');
     const peakLinePts = pts.map((p,i)=> xFor(i).toFixed(1)+','+yFor(p.peak).toFixed(1)).join(' ');
-    const areaPts = `${xFor(0)},${zeroY} ${linePts} ${xFor(pts.length-1)},${zeroY}`;
-    const ddBandPts = pts.map((p,i)=> xFor(i).toFixed(1)+','+yFor(p.y).toFixed(1)).join(' ') + ' ' +
-      pts.slice().reverse().map((p,i)=> xFor(pts.length-1-i).toFixed(1)+','+yFor(pts[pts.length-1-i].peak).toFixed(1)).join(' ');
-    const lineColor = running>=0 ? 'var(--teal)' : 'var(--rose)';
+    const areaPts = `${xFor(0).toFixed(1)},${zeroY.toFixed(1)} ${linePts} ${xFor(n-1).toFixed(1)},${zeroY.toFixed(1)}`;
+    const ddBandPts = linePts + ' ' + pts.slice().reverse().map((p,k)=> xFor(n-1-k).toFixed(1)+','+yFor(pts[n-1-k].peak).toFixed(1)).join(' ');
+    const gid = 'eqFill'+Math.round(Math.random()*1e6);
 
     let fyDividerSvg = '';
     if(opts.fyDividers){
-      for(let i=1;i<pts.length;i++){
-        if(pts[i].fy !== pts[i-1].fy){
-          const x = xFor(i).toFixed(1);
-          fyDividerSvg += `<line x1="${x}" y1="${padT}" x2="${x}" y2="${h-padB}" stroke="var(--ink-faint)" stroke-width="1" stroke-dasharray="2,3" opacity="0.5"/>`;
-        }
-      }
+      for(let i=1;i<n;i++){ if(pts[i].fy !== pts[i-1].fy){ const x = xFor(i).toFixed(1); fyDividerSvg += `<line x1="${x}" y1="${padT}" x2="${x}" y2="${h-padB}" stroke="var(--ink-faint)" stroke-width="1" stroke-dasharray="2,3" opacity="0.5"/>`; } }
     }
 
-    const dots = pts.map((p,i)=>{
-      if(i===0) return '';
-      const isWin = p.pnl>=0;
-      const isPeak = i===peakIdx, isTrough = (i===troughIdx && maxDD>0);
-      const r = isPeak||isTrough ? 4.5 : 2.6;
-      const fill = isPeak ? 'var(--teal)' : (isTrough ? 'var(--rose)' : (isWin?'var(--teal)':'var(--rose)'));
-      const cx = xFor(i).toFixed(1), cy = yFor(p.y).toFixed(1);
-      // Invisible larger hit-circle sits under the visible dot so the tap/hover
-      // target is comfortably finger-sized on mobile without changing how the
-      // chart looks — the small dot alone is too fiddly to tap accurately.
-      return `<circle class="eq-dot-hit" data-i="${i}" cx="${cx}" cy="${cy}" r="11" fill="transparent"/>` +
-        `<circle class="eq-dot" data-i="${i}" cx="${cx}" cy="${cy}" r="${r}" fill="${fill}" opacity="${isPeak||isTrough?1:0.8}" pointer-events="none"/>`;
-    }).join('');
+    // small win/loss dots only when there are few enough to read; hover handles the rest
+    const dots = n<=70 ? pts.map((p,i)=> i===0 ? '' : `<circle cx="${xFor(i).toFixed(1)}" cy="${yFor(p.y).toFixed(1)}" r="2.3" fill="${p.pnl>=0?'var(--teal)':'var(--rose)'}" stroke="var(--surface)" stroke-width="1"/>`).join('') : '';
 
-    // Peak/trough labels flip to whichever side of their dot has room, instead
-    // of always sitting above (Peak) or below (trough) — a trough near the
-    // bottom edge or a peak near the top edge used to get its label clamped
-    // right back onto the dot it's labeling, so text and marker overlapped.
-    const peakY = yFor(pts[peakIdx].y);
-    const troughY = yFor(pts[troughIdx].y);
-    const peakLabelY = (peakY - 8 >= padT + 7) ? peakY - 8 : peakY + 13;
-    const troughLabelY = (troughY + 13 <= h - padB + 1) ? troughY + 13 : troughY - 8;
-    // On-chart trough label now just reads "Bottom" (mirroring "Peak") instead
-    // of printing the drawdown figure — the actual number still lives in the
-    // "max DD ..." summary line under the chart title via fmtDrawdown().
-    const markerLabels = `
-      ${peakIdx>0 ? `<text x="${xFor(peakIdx).toFixed(1)}" y="${peakLabelY.toFixed(1)}" font-size="9" fill="var(--teal)" text-anchor="middle" font-family="IBM Plex Mono">Peak</text>` : ''}
-      ${troughIdx>0 && maxDD>0 ? `<text x="${xFor(troughIdx).toFixed(1)}" y="${troughLabelY.toFixed(1)}" font-size="9" fill="var(--rose)" text-anchor="middle" font-family="IBM Plex Mono">Bottom</text>` : ''}
-    `;
+    // pill label (never overlaps its own marker: sits above or below, clamped inside the plot)
+    const pill = (cx, cy, text, color, prefer) => {
+      const tw = Math.max(34, text.length*6.1+14);
+      let x = prefer==='left' ? Math.max(padL, cx-tw-8) : Math.min(w-padR-tw, Math.max(padL, cx-tw/2));
+      let y = (prefer==='above' || prefer==='left') ? cy-26 : cy+10;
+      if(y < padT-2) y = cy+10;
+      if(y+17 > h-padB+2) y = cy-26;
+      return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${tw.toFixed(1)}" height="17" rx="8.5" fill="${color}"/>`+
+        `<text x="${(x+tw/2).toFixed(1)}" y="${(y+11.8).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" font-family="IBM Plex Mono" fill="#fff">${escapeHtml(text)}</text>`;
+    };
+    let marks = '';
+    // max-drawdown bracket: from the running high down to the trough, with its size
+    if(maxDD>0 && ddTroughI>ddPeakI){
+      const x1 = xFor(ddPeakI), x2 = xFor(ddTroughI), y1 = yFor(pts[ddPeakI].y), y2 = yFor(pts[ddTroughI].y);
+      marks += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y1.toFixed(1)}" stroke="var(--rose)" stroke-width="1" stroke-dasharray="3,3" opacity=".7"/>`+
+        `<line x1="${x2.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="var(--rose)" stroke-width="1.4" opacity=".85"/>`+
+        `<circle cx="${x1.toFixed(1)}" cy="${y1.toFixed(1)}" r="3" fill="var(--surface)" stroke="var(--rose)" stroke-width="1.5"/>`+
+        `<circle cx="${x2.toFixed(1)}" cy="${y2.toFixed(1)}" r="3.4" fill="var(--rose)" stroke="var(--surface)" stroke-width="1.5"/>`;
+      if((y2-y1) > 26){
+        const midY = (y1+y2)/2, txt = 'Max DD '+fmtDrawdown(maxDD), tw = txt.length*5.9+14;
+        const lx = (x2+tw+8 < w-padR) ? x2+8 : x2-tw-8;
+        marks += `<rect x="${lx.toFixed(1)}" y="${(midY-8.5).toFixed(1)}" width="${tw.toFixed(1)}" height="17" rx="8.5" fill="var(--surface)" stroke="var(--rose)" stroke-width="1"/>`+
+          `<text x="${(lx+tw/2).toFixed(1)}" y="${(midY+3.6).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" font-family="IBM Plex Mono" fill="var(--rose)">${escapeHtml(txt)}</text>`;
+      }
+    }
+    if(showHi){
+      marks += `<circle cx="${xFor(hiI).toFixed(1)}" cy="${yFor(hiV).toFixed(1)}" r="4.6" fill="var(--teal)" stroke="var(--surface)" stroke-width="2"/>` + pill(xFor(hiI), yFor(hiV), 'Peak '+fmtCompactPnl(hiV).replace(/^\+/,''), 'var(--teal)', hiI>=n-3 ? 'left' : 'above');
+    }
+    if(showLo){
+      marks += `<circle cx="${xFor(loI).toFixed(1)}" cy="${yFor(loV).toFixed(1)}" r="4.6" fill="var(--rose)" stroke="var(--surface)" stroke-width="2"/>` + pill(xFor(loI), yFor(loV), 'Low '+fmtCompactPnl(loV), 'var(--rose)', 'below');
+    }
+    // end-value pill on the right edge
+    const endY = yFor(running);
+    const endTxt = fmtCompactPnl(running);
+    marks += `<circle cx="${xFor(n-1).toFixed(1)}" cy="${endY.toFixed(1)}" r="3.4" fill="${lineColor}" stroke="var(--surface)" stroke-width="1.6"/>`+
+      `<rect x="${w-padR+4}" y="${(endY-8.5).toFixed(1)}" width="${padR-6}" height="17" rx="8.5" fill="${lineColor}"/>`+
+      `<text x="${(w-padR+4+(padR-6)/2).toFixed(1)}" y="${(endY+3.8).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" font-family="IBM Plex Mono" fill="#fff">${escapeHtml(endTxt)}</text>`;
 
+    containerEl.style.position = 'relative';
     containerEl.innerHTML = `
-      <svg class="td-chart-svg eq-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
-        <line x1="${padL}" y1="${zeroY}" x2="${w-padR}" y2="${zeroY}" stroke="var(--line)" stroke-width="1" stroke-dasharray="3,3"/>
+      <svg class="eq-svg2" width="100%" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block; height:${h}px;">
+        <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${running>=0?'#4A8F6A':'#C0583F'}" stop-opacity=".26"/><stop offset="1" stop-color="${running>=0?'#4A8F6A':'#C0583F'}" stop-opacity=".03"/></linearGradient></defs>
+        ${grid}
+        <line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w-padR}" y2="${zeroY.toFixed(1)}" stroke="var(--ink-faint)" stroke-width="1" stroke-dasharray="4,4" opacity=".55"/>
+        ${xl}
         ${fyDividerSvg}
-        <polygon points="${areaPts}" fill="${lineColor}" opacity="0.08"/>
-        <polygon points="${ddBandPts}" fill="var(--rose)" opacity="0.13"/>
-        <polyline points="${peakLinePts}" fill="none" stroke="var(--ink-faint)" stroke-width="1" stroke-dasharray="2,3" opacity="0.5"/>
-        <polyline points="${linePts}" fill="none" stroke="${lineColor}" stroke-width="2"/>
-        ${markerLabels}
+        <polygon points="${areaPts}" fill="url(#${gid})"/>
+        <polygon points="${ddBandPts}" fill="var(--rose)" opacity="0.11"/>
+        <polyline points="${peakLinePts}" fill="none" stroke="var(--ink-faint)" stroke-width="1" stroke-dasharray="2,3" opacity="0.55"/>
+        <polyline points="${linePts}" fill="none" stroke="${lineColor}" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round"/>
         ${dots}
-      </svg>`;
+        ${marks}
+        <line class="eq-cross" x1="0" y1="${padT}" x2="0" y2="${h-padB}" stroke="var(--ink-faint)" stroke-width="1" stroke-dasharray="3,3" opacity="0"/>
+        <circle class="eq-hover-dot" cx="0" cy="0" r="4.2" fill="${lineColor}" stroke="var(--surface)" stroke-width="2" opacity="0"/>
+      </svg>
+      <div class="cmp-hit"></div>`;
 
+    const svgEl = containerEl.querySelector('svg'), hitEl = containerEl.querySelector('.cmp-hit');
+    const crossEl = containerEl.querySelector('.eq-cross'), hdotEl = containerEl.querySelector('.eq-hover-dot');
     const tip = ensureEquityTooltip();
-    containerEl.querySelectorAll('.eq-dot-hit').forEach(dot=>{
-      const i = parseInt(dot.dataset.i,10);
-      const p = pts[i];
-      const show = ()=>{
-        tip.innerHTML = `<div class="eq-tip-tk">${escapeHtml(p.ticker||'Trade')}</div><div class="eq-tip-date">${escapeHtml(p.label||'')}</div><div class="eq-tip-pnl ${p.pnl>=0?'pos':'neg'}">${fmtPnl(Math.round(p.pnl))} · cum ${fmtPnl(Math.round(p.y))}</div>`;
-        tip.style.display = 'block';
-        const dotRect = dot.getBoundingClientRect();
-        tip.style.left = (dotRect.left + dotRect.width/2 + window.scrollX) + 'px';
-        tip.style.top = (dotRect.top + window.scrollY - 6) + 'px';
-      };
-      dot.addEventListener('mouseenter', show);
-      dot.addEventListener('mouseleave', hideEquityTooltip);
-      dot.addEventListener('click', (e)=>{ e.stopPropagation(); show(); });
-    });
+    function clearHover(){ hideEquityTooltip(); crossEl.setAttribute('opacity','0'); hdotEl.setAttribute('opacity','0'); }
+    function handleMove(clientX){
+      const rect = svgEl.getBoundingClientRect(); if(!rect.width) return;
+      const px = (clientX-rect.left)*(w/rect.width);
+      const i = Math.max(0, Math.min(n-1, Math.round(((px-padL)/plotW)*(n-1))));
+      const p = pts[i], cx = xFor(i), cy = yFor(p.y);
+      crossEl.setAttribute('x1', cx.toFixed(1)); crossEl.setAttribute('x2', cx.toFixed(1)); crossEl.setAttribute('opacity','0.7');
+      hdotEl.setAttribute('cx', cx.toFixed(1)); hdotEl.setAttribute('cy', cy.toFixed(1)); hdotEl.setAttribute('opacity','1');
+      tip.innerHTML = i===0
+        ? `<div class="eq-tip-tk">Start</div><div class="eq-tip-pnl">0</div>`
+        : `<div class="eq-tip-tk">${escapeHtml(p.ticker||'Trade')}</div><div class="eq-tip-date">${escapeHtml(p.label||'')}</div><div class="eq-tip-pnl ${p.pnl>=0?'pos':'neg'}">${fmtPnl(Math.round(p.pnl))} · cum ${fmtPnl(Math.round(p.y))}</div>`;
+      tip.style.display = 'block';
+      tip.style.left = (rect.left + (cx/w)*rect.width + window.scrollX) + 'px';
+      tip.style.top = (rect.top + (cy/h)*rect.height + window.scrollY - 10) + 'px';
+    }
+    hitEl.addEventListener('mousemove', e=> handleMove(e.clientX));
+    hitEl.addEventListener('mouseleave', clearHover);
+    hitEl.addEventListener('touchstart', e=>{ if(e.touches[0]) handleMove(e.touches[0].clientX); }, {passive:true});
+    hitEl.addEventListener('touchmove', e=>{ if(e.touches[0]) handleMove(e.touches[0].clientX); }, {passive:true});
+    hitEl.addEventListener('touchend', clearHover);
 
     if(rangeEl){
       const ddText = maxDD>0 ? ' · max DD '+fmtDrawdown(maxDD) : '';
-      rangeEl.textContent = (pts[1]?.label||'')+' → '+(pts[pts.length-1].label||'')+' · '+fmtPnl(Math.round(running))+' cumulative'+ddText;
+      rangeEl.textContent = (pts[1]?.label||'')+' → '+(pts[n-1].label||'')+' · '+fmtPnl(Math.round(running))+' cumulative'+ddText;
     }
   }
 
@@ -6979,21 +7046,21 @@
     if(!bkReady() || !bkCfg().livePrices) { bkPaintBadges(); return; }
     if(Date.now() < bkCooldownUntil){ bkPaintBadges(); return; }
     if(liveState.status==='err' && Date.now()-bkLastAttempt < 30000) return;
-    var age = Date.now()-(liveState.asOf||0), limit = bkMarketOpen() ? 45000 : 300000;
+    var age = Date.now()-(liveState.asOf||0), limit = bkMarketOpen() ? 5000 : 300000;
     if(liveState.status!=='ok' || age>limit) bkRefreshQuotes();
   }
   function bkLiveDependents(){
     try{ if(bkPanelActive('pnl')) renderPnlPanel(true); }catch(e){ console.warn(e); }
     try{ if(bkPanelActive('chart')) tcOnLiveTick(); }catch(e){ console.warn(e); }
     try{ if(bkPanelActive('portfolio')) renderPortfolio(); }catch(e){ console.warn(e); }
-    try{ if(bkPanelActive('overview')) renderTradeOverview(); }catch(e){ console.warn(e); }
+    try{ if(bkPanelActive('overview')) renderOverviewLive(); }catch(e){ console.warn(e); }
   }
   function bkStartLoop(){
     if(liveTimer) return;
     liveTimer = setInterval(function(){
       if(document.hidden || !bkReady() || !bkCfg().livePrices || !bkTradesVisible()) return;
       if(bkMarketOpen()) bkRefreshQuotes();
-    }, 45000);
+    }, 5000);
     document.addEventListener('visibilitychange', function(){ if(!document.hidden && bkTradesVisible()) bkMaybeRefresh(); });
   }
 
@@ -7159,8 +7226,10 @@
     if(!containerEl._cmpRO && typeof ResizeObserver!=='undefined'){
       let lastW = 0;
       containerEl._cmpRO = new ResizeObserver(function(){
-        const wNow = Math.round(containerEl.clientWidth||0);
-        if(wNow && Math.abs(wNow-lastW)>24 && containerEl._cmpArgs){ lastW = wNow; renderComparisonChart(containerEl, containerEl._cmpArgs.series, containerEl._cmpArgs.opts); }
+        requestAnimationFrame(function(){
+          const wNow = Math.round(containerEl.clientWidth||0);
+          if(wNow && Math.abs(wNow-lastW)>24 && containerEl._cmpArgs){ lastW = wNow; renderComparisonChart(containerEl, containerEl._cmpArgs.series, containerEl._cmpArgs.opts); }
+        });
       });
       containerEl._cmpRO.observe(containerEl);
     }
@@ -7927,6 +7996,7 @@
   // so the exact error can be reported.
   var lastErrToast = 0;
   function reportRuntimeError(msg){
+    if(/ResizeObserver loop/i.test(String(msg))) return;   // harmless browser notice, not a real error
     console.error('[FocusVerge]', msg);
     if(Date.now()-lastErrToast < 10000) return; lastErrToast = Date.now();
     try{ showToast('Something went wrong: '+String(msg).slice(0,140)); }catch(e){}
@@ -7994,7 +8064,7 @@
     var fmtD = function(k){ return new Date(k+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric', month:'short'}); };
     if(sub) sub.textContent = 'Period-end unrealised, plus what each '+usnapKind+' really earned: realised + change in unrealised.';
     var cls = function(n){ return n>=0 ? 'pos' : 'neg'; };
-    list.innerHTML = '<div class="td-bd-list">' + rows.map(function(g){
+    list.innerHTML = '<div class="td-bd-list" style="grid-template-columns:1fr;">' + rows.map(function(g){
       var label = usnapKind==='month' ? monthLabelFromDateStr(g.id+'-01') : fmtD(g.id)+' – '+fmtD(usnapAddDays(g.id,6));
       var isNow = g.id===curId;
       var w = Math.min(100, Math.abs(g.endU)/mx*100);
@@ -8026,7 +8096,15 @@
     return Math.max(0, area/(now-from));
   }
 
+  var tdHeroRefresh = null, tdAllocRefresh = null, tdOverviewFullAt = 0;
+  function renderOverviewLive(){
+    if(Date.now()-tdOverviewFullAt > 60000 || !tdHeroRefresh){ tdOverviewFullAt = Date.now(); renderTradeOverview(); return; }
+    try{ tdHeroRefresh(); }catch(e){}
+    try{ if(tdAllocRefresh) tdAllocRefresh(); }catch(e){}
+    try{ recordUnrealSnapshot(); renderUnrealTracker(); }catch(e){}
+  }
   function renderTradeOverview(){
+    tdOverviewFullAt = Date.now();
     const grid = document.getElementById('tdOverviewStats');
     if(!grid) return;
     const trades = db.trades||[];
@@ -8035,6 +8113,7 @@
     renderUnrealTracker();
 
     // ---- Groww-style hero card: big net P&L + today/week/capital-deployed row ----
+    const renderHero = function(){
     const heroEl = document.getElementById('tdHeroCard');
     if(heroEl){
       const tKey = todayKey();
@@ -8052,9 +8131,20 @@
       const heroUnreal = trades.filter(t=> !t.exitDT).reduce((s,t)=>{ const u=parseFloat(t.unrealizedPnl); return isNaN(u)?s:s+u; }, 0);
       const heroHasUnreal = trades.some(t=> !t.exitDT && !isNaN(parseFloat(t.unrealizedPnl)));
       heroEl.className = 'td-hero-card' + (trades.length ? (m.net>=0?' pos':' neg') : '');
+      const heroRoc = returnOnCapitalPct(trades, null, null);
+      const heroPf = (m.profitFactor===Infinity ? '∞' : (m.grossLoss||m.grossProfit ? m.profitFactor.toFixed(2) : '—'));
       heroEl.innerHTML = `
-        <div class="td-hero-lbl">Realised P&amp;L · All Time</div>
-        <div class="td-hero-value ${m.net>=0?'pos':'neg'}">${fmtPnl(Math.round(m.net))}</div>
+        <div class="td-hero-top">
+          <div>
+            <div class="td-hero-lbl">Realised P&amp;L · All Time</div>
+            <div class="td-hero-value ${m.net>=0?'pos':'neg'}">${fmtPnl(Math.round(m.net))}</div>
+          </div>
+          <div class="td-hero-chips">
+            <span class="td-chip ${heroRoc!==null?(heroRoc>=0?'pos':'neg'):''}">Return on capital <b>${heroRoc!==null?(heroRoc>=0?'+':'')+heroRoc.toFixed(1)+'%':'—'}</b></span>
+            <span class="td-chip">Win rate <b>${m.withPnlCount?Math.round(m.winRate)+'%':'—'}</b></span>
+            <span class="td-chip">Profit factor <b>${heroPf}</b></span>
+          </div>
+        </div>
         <div class="td-hero-stats-row">
           <div class="td-hero-stat"><div class="td-hero-stat-lbl">Today</div><div class="td-hero-stat-val ${todayPnl>=0?'pos':'neg'}">${fmtPnl(Math.round(todayPnl))}</div></div>
           <div class="td-hero-stat"><div class="td-hero-stat-lbl">Last 7 Days</div><div class="td-hero-stat-val ${weekPnl>=0?'pos':'neg'}">${fmtPnl(Math.round(weekPnl))}</div></div>
@@ -8064,6 +8154,8 @@
           <div class="td-hero-stat"><div class="td-hero-stat-lbl">Avg Capital Used · 30D</div><div class="td-hero-stat-val">${avgDeployed30>0?fmtCapitalStat(avgDeployed30):'—'}</div></div>
         </div>`;
     }
+    };
+    renderHero(); tdHeroRefresh = renderHero;
 
     // ---- Open Position Allocation: what share of the capital you have
     // deployed *right now* (i.e. total capital tied up across all open
@@ -8071,6 +8163,7 @@
     // deliberately a different denominator than Return on Capital — it's
     // "how is my currently-open book split up", not "how much of my whole
     // account is at risk" — so the percentages here always sum to 100%.
+    const renderAlloc = function(){
     const allocCardEl = document.getElementById('tdOpenAllocCard');
     const allocListEl = document.getElementById('tdOpenAllocList');
     const allocSubEl = document.getElementById('tdOpenAllocSub');
@@ -8116,6 +8209,9 @@
       }
     }
 
+    };
+    renderAlloc(); tdAllocRefresh = renderAlloc;
+
     const allTimeReturnPct = returnOnCapitalPct(trades, null, null);
 
     // ---- Daily loss limit banner: warns once today's realized loss crosses
@@ -8133,14 +8229,16 @@
         limitBannerEl.innerHTML = '';
       }
     }
+    const payoff = (m.avgWin && m.avgLoss) ? (m.avgWin/m.avgLoss) : null;
     grid.innerHTML = [
       statCardHtml('Win Rate', m.withPnlCount? Math.round(m.winRate)+'%' : '—', '', m.wins+'W / '+m.losses+'L'),
-      statCardHtml('Profit Factor', m.profitFactor===Infinity ? '∞' : (m.grossLoss||m.grossProfit ? m.profitFactor.toFixed(2) : '—')),
-      statCardHtml('Avg R-Multiple', m.avgR!==null ? m.avgR.toFixed(2)+'R' : '—'),
-      statCardHtml('Max Drawdown', fmtDrawdown(m.maxDD), m.maxDD?'neg':''),
-      statCardHtml(m.streakType==='loss'?'Losing Streak':'Winning Streak', m.streakCount||0, m.streakType==='loss'?'neg':(m.streakType==='win'?'pos':'')),
-      statCardHtml('Total Trades', trades.length),
-      statCardHtml('Return on Capital', allTimeReturnPct!==null ? (allTimeReturnPct>=0?'+':'')+allTimeReturnPct.toFixed(1)+'%' : '—', allTimeReturnPct!==null?(allTimeReturnPct>=0?'pos':'neg'):'', 'vs '+capitalBaseSourceLabel()),
+      statCardHtml('Profit Factor', m.profitFactor===Infinity ? '∞' : (m.grossLoss||m.grossProfit ? m.profitFactor.toFixed(2) : '—'), '', 'gross profit ÷ gross loss'),
+      statCardHtml('Avg Win / Avg Loss', (m.avgWin||m.avgLoss) ? fmtPnl(Math.round(m.avgWin))+' / '+fmtPnl(-Math.round(m.avgLoss)) : '—', '', payoff!==null ? 'payoff ratio '+payoff.toFixed(2)+'×' : ''),
+      statCardHtml('Expectancy', m.withPnlCount ? fmtPnl(Math.round(m.expectancy)) : '—', m.withPnlCount ? (m.expectancy>=0?'pos':'neg') : '', 'avg P&L per trade'),
+      statCardHtml('Max Drawdown', fmtDrawdown(m.maxDD), m.maxDD?'neg':'', 'worst fall from a high'),
+      statCardHtml(m.streakType==='loss'?'Losing Streak':'Winning Streak', m.streakCount||0, m.streakType==='loss'?'neg':(m.streakType==='win'?'pos':''), 'trades in a row'),
+      statCardHtml('Avg R-Multiple', m.avgR!==null ? m.avgR.toFixed(2)+'R' : '—', '', m.avgR!==null ? '' : 'set stop-loss to track'),
+      statCardHtml('Total Trades', trades.length, '', 'logged all time'),
     ].join('');
 
     // ---- Equity curve (SVG line + area, drawdown shading, peak/trough, tooltips) ----
