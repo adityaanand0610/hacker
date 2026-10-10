@@ -7006,10 +7006,10 @@
   // on-device for 12 h; if a refresh fails the stale cache is used.
   var BENCHMARK_TICKERS = {
     nifty50:     { symbols: ['NSE:NIFTY 50', 'NSE:NIFTY'], label: 'Nifty 50', color: '#4A7FB5' },
-    midcap100:   { symbols: ['NSE:NIFTY MIDCAP 100', 'NSE:NIFTYMIDCAP100', 'NSE:NIFTY MIDCAP100', 'NSE:MOM100'], label: 'Nifty Midcap 100', color: 'var(--teal)' },
-    smallcap250: { symbols: ['NSE:NIFTY SMLCAP 250', 'NSE:NIFTY SMALLCAP 250', 'NSE:NIFTYSMLCAP250', 'NSE:NIFTYSMALLCAP250', 'NSE:HDFCSML250'], label: 'Nifty Smallcap 250', color: 'var(--rose)' }
+    midcap100:   { symbols: ['NSE:NIFTY MIDCAP 100', 'NSE:NIFTYMIDCAP100', 'NSE:NIFTY MIDCAP100', 'NSE:MID150BEES', 'NSE:MOM100', 'NSE:MIDCAPETF'], label: 'Nifty Midcap 100', color: 'var(--teal)' },
+    smallcap250: { symbols: ['NSE:NIFTY SMLCAP 250', 'NSE:NIFTY SMALLCAP 250', 'NSE:NIFTYSMLCAP250', 'NSE:NIFTYSMALLCAP250', 'NSE:HDFCSML250', 'NSE:SMALLCAP', 'NSE:MOSMALL250'], label: 'Nifty Smallcap 250', color: 'var(--rose)' }
   };
-  const BENCHMARK_CACHE_KEY = 'fv_benchmark_cache_v5';
+  const BENCHMARK_CACHE_KEY = 'fv_benchmark_cache_v6';
   const BENCHMARK_CACHE_TTL = 12*60*60*1000;
   let benchmarkMemCache = {};
   let benchQueue = Promise.resolve();
@@ -7019,13 +7019,13 @@
 
   // Older app versions saved their index data under earlier cache keys. Reuse it so the comparison
   // lines still show (and keep showing, slightly stale) while the broker is rate-limited.
-  const BENCHMARK_LEGACY_KEYS = ['fv_benchmark_cache_v4','fv_benchmark_cache_v3','fv_benchmark_cache_v2','fv_benchmark_cache_v1','fv_benchmark_cache'];
+  const BENCHMARK_LEGACY_KEYS = ['fv_benchmark_cache_v5','fv_benchmark_cache_v4','fv_benchmark_cache_v3','fv_benchmark_cache_v2','fv_benchmark_cache_v1','fv_benchmark_cache'];
   function loadBenchmarkDiskCache(){
     var c = {}; try{ c = JSON.parse(localStorage.getItem(BENCHMARK_CACHE_KEY) || '{}') || {}; }catch(e){}
     Object.keys(BENCHMARK_TICKERS).forEach(function(k){
       if(c[k] && c[k].points && c[k].points.length) return;
       for(var i=0;i<BENCHMARK_LEGACY_KEYS.length;i++){
-        try{ var o = JSON.parse(localStorage.getItem(BENCHMARK_LEGACY_KEYS[i]) || 'null'); if(o && o[k] && o[k].points && o[k].points.length){ c[k] = o[k]; break; } }catch(e){}
+        try{ var o = JSON.parse(localStorage.getItem(BENCHMARK_LEGACY_KEYS[i]) || 'null'); if(o && o[k] && o[k].points && o[k].points.length>=20){ c[k] = o[k]; break; } }catch(e){}
       }
     });
     return c;
@@ -7036,7 +7036,10 @@
     const cfg = BENCHMARK_TICKERS[key];
     if(!cfg) return null;
     const disk = loadBenchmarkDiskCache(), cached = disk[key];
-    if(cached && (Date.now()-cached.fetchedAt) < BENCHMARK_CACHE_TTL) return cached.points;
+    if(cached && !cached.partial && cached.points && cached.points.length>=8 && (Date.now()-cached.fetchedAt) < BENCHMARK_CACHE_TTL){
+      const ld = cached.points[cached.points.length-1].date;
+      if((Date.now()-new Date(ld+'T00:00:00').getTime())/86400000 <= 7) return cached.points;
+    }
     if(!bkReady()) return cached ? cached.points : null;
     if(Date.now() < bkCooldownUntil) return cached ? cached.points : null;
     const failAt = disk['_fail_'+key];
@@ -7048,6 +7051,16 @@
     let lookback = 400;
     if(earliest){ const dd = Math.ceil((Date.now()-new Date(earliest+'T00:00:00').getTime())/86400000)+20; if(dd>0) lookback = Math.max(120, Math.min(1820, dd)); }
     fromD.setDate(fromD.getDate()-lookback);
+    const fromKeyNeeded = todayKey(fromD);
+    // A usable series is recent, long enough, and starts near the date we need. Thin / stale
+    // series (typical of illiquid ETF stand-ins) are skipped in favour of the next symbol.
+    const seriesOk = function(pts){
+      if(!pts || pts.length<8) return false;
+      const lastD = pts[pts.length-1].date, ageDays = (Date.now()-new Date(lastD+'T00:00:00').getTime())/86400000;
+      if(ageDays>7) return false;
+      return pts[0].date <= todayKey(new Date(new Date(fromKeyNeeded+'T00:00:00').getTime()+14*86400000));
+    };
+    let bestPartial = null, bestPartialSym = '', bestPartialSrc = '';
     let lastErr = null;
     let first = true;
     for(const symbol of cfg.symbols){
@@ -7055,12 +7068,21 @@
       first = false;
       try{
         const r = await bkGet('/candles', {symbol:symbol, interval:'day', from: todayKey(fromD), to:to, broker: bkCfg().pref}, 40000);
-        const points = (r.candles||[]).map(function(c){ return {date: bkIstDate(c.t), close: c.c}; }).filter(function(p){ return p.close!=null && !isNaN(p.close); });
+        const points = (r.candles||[]).map(function(c){ return {date: bkIstDate(c.t), close: c.c}; }).filter(function(p){ return p.close!=null && !isNaN(p.close) && p.close>0; }).sort(function(a,b){ return a.date.localeCompare(b.date); });
         if(!points.length) throw new Error('empty series for '+symbol);
+        if(!seriesOk(points)){
+          if(!bestPartial || points.length>bestPartial.length){ bestPartial = points; bestPartialSym = symbol; bestPartialSrc = r.source; }
+          throw new Error('too little recent data for '+symbol+' ('+points.length+' days)');
+        }
         disk[key] = { points:points, fetchedAt: Date.now(), symbol:symbol, source:r.source };
         saveBenchmarkDiskCache(disk);
         return points;
       }catch(err){ lastErr = err; benchErr[key] = symbol+': '+err.message; console.warn('Benchmark fetch failed for', key, symbol, err.message); if(bkIsRateLimit(err)){ bkStartCooldown(); break; } if(err.code==='no_proxy' || err.code==='kite_login') break; }
+    }
+    if(bestPartial && bestPartial.length>=2){
+      disk[key] = { points:bestPartial, fetchedAt: Date.now(), symbol:bestPartialSym, source:bestPartialSrc, partial:true };
+      saveBenchmarkDiskCache(disk);
+      return bestPartial;
     }
     if(!attempt && lastErr && (lastErr.code==='timeout' || lastErr.code==='network')){ await new Promise(function(r){ setTimeout(r,1500); }); return fetchBenchmarkSeries(key, 1); }
     if(lastErr && !bkIsRateLimit(lastErr)){ disk['_fail_'+key] = Date.now(); saveBenchmarkDiskCache(disk); }
@@ -7113,10 +7135,16 @@
   // (from currently-visible series only). A transparent hit-layer over the whole
   // chart drives a crosshair + shared tooltip listing every visible series at the
   // nearest date to wherever the finger/cursor is.
+  function cmpNiceTicks(min, max, n){
+    const span = (max-min) || 1, raw = span/n, mag = Math.pow(10, Math.floor(Math.log10(raw))), norm = raw/mag;
+    const step = (norm<1.5 ? 1 : norm<3 ? 2 : norm<7 ? 5 : 10)*mag, out = [];
+    for(let v=Math.ceil(min/step)*step; v<=max+step*1e-6; v+=step) out.push(Math.round(v/step)*step);
+    return out;
+  }
   function renderComparisonChart(containerEl, series, opts){
     opts = opts || {};
     if(!containerEl) return;
-    const withData = series.filter(s=> s.points && s.points.length);
+    const withData = series.filter(s=> s.points && s.points.length>1);
     if(!withData.length){
       containerEl.innerHTML = '<div class="td-empty-note">'+(opts.emptyText||'No data yet.')+'</div>';
       return;
@@ -7126,42 +7154,99 @@
       containerEl.innerHTML = '<div class="td-empty-note">Every series is hidden — tap a legend item to show one.</div>';
       return;
     }
+    // keep the chart crisp at any width: redraw when the container is resized
+    containerEl._cmpArgs = {series: series, opts: opts};
+    if(!containerEl._cmpRO && typeof ResizeObserver!=='undefined'){
+      let lastW = 0;
+      containerEl._cmpRO = new ResizeObserver(function(){
+        const wNow = Math.round(containerEl.clientWidth||0);
+        if(wNow && Math.abs(wNow-lastW)>24 && containerEl._cmpArgs){ lastW = wNow; renderComparisonChart(containerEl, containerEl._cmpArgs.series, containerEl._cmpArgs.opts); }
+      });
+      containerEl._cmpRO.observe(containerEl);
+    }
 
-    const w=640, h=opts.height||190, padL=6, padR=6, padT=16, padB=6;
+    const w = Math.max(300, Math.round(containerEl.clientWidth || 640));
+    const h = Math.max(opts.height||0, w<520 ? 230 : 270);
+    const padL = 46, padR = 62, padT = 14, padB = 26;
+    const plotW = w-padL-padR, plotH = h-padT-padB;
     const allTimes = [];
     withData.forEach(s=> s.points.forEach(p=>{ const t=parseDateMs(p.date); if(!isNaN(t)) allTimes.push(t); }));
-    const minT = Math.min(...allTimes), maxT = Math.max(...allTimes);
+    const minT = Math.min.apply(null, allTimes), maxT = Math.max.apply(null, allTimes);
     const spanT = (maxT-minT) || 1;
-    const xFor = t => padL + ((t-minT)/spanT)*(w-padL-padR);
+    const xFor = t => padL + ((t-minT)/spanT)*plotW;
 
-    const allVals = [];
+    const allVals = [0];
     visible.forEach(s=> s.points.forEach(p=> allVals.push(p.v)));
-    const minV = Math.min(0, ...allVals), maxV = Math.max(0, ...allVals);
+    let minV = Math.min.apply(null, allVals), maxV = Math.max.apply(null, allVals);
+    const pad = ((maxV-minV)||1)*0.08; minV -= pad; maxV += pad;
     const spanV = (maxV-minV) || 1;
-    const yFor = v => padT + (1-((v-minV)/spanV))*(h-padT-padB);
-    const zeroY = yFor(0).toFixed(1);
+    const yFor = v => padT + (1-((v-minV)/spanV))*plotH;
+    const zeroY = yFor(0);
+    const fmtP = v => Math.abs(v)<1e-9 ? '0%' : (v>0?'+':'')+(Math.abs(v)>=10 || Math.abs(v-Math.round(v))<1e-9 ? v.toFixed(0) : v.toFixed(1))+'%';
 
-    const linesSvg = visible.map(s=>{
-      const pts = s.points.filter(p=> !isNaN(parseDateMs(p.date)));
-      const linePts = pts.map(p=> xFor(parseDateMs(p.date)).toFixed(1)+','+yFor(p.v).toFixed(1)).join(' ');
-      const last = pts[pts.length-1];
-      const dotX = xFor(parseDateMs(last.date)).toFixed(1), dotY = yFor(last.v).toFixed(1);
-      return `<polyline points="${linePts}" fill="none" stroke="${s.color}" stroke-width="${s.isPrimary?2.5:2}" opacity="${s.isPrimary?1:0.95}"/>`+
-        `<circle cx="${dotX}" cy="${dotY}" r="3.5" fill="${s.color}"/>`;
+    // horizontal grid + left axis labels
+    const ticks = cmpNiceTicks(minV, maxV, h<250 ? 4 : 5);
+    let grid = ticks.map(v=>{
+      const y = yFor(v).toFixed(1);
+      return `<line x1="${padL}" x2="${w-padR}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-width="1" opacity="${Math.abs(v)<1e-9?0:0.55}"/>`+
+        `<text x="${padL-8}" y="${(+y+3.5).toFixed(1)}" text-anchor="end" font-size="10" font-family="IBM Plex Mono" fill="var(--ink-faint)">${fmtP(v)}</text>`;
     }).join('');
+    // x axis date labels
+    const nX = w<520 ? 4 : 6, spanDays = spanT/86400000;
+    let xl = '';
+    for(let i=0;i<nX;i++){
+      const t = minT + spanT*(i/(nX-1)), d = new Date(t);
+      const lbl = d.toLocaleDateString('en-IN', spanDays>330 ? {month:'short', year:'2-digit'} : {day:'numeric', month:'short'});
+      const anchor = i===0 ? 'start' : (i===nX-1 ? 'end' : 'middle');
+      xl += `<text x="${xFor(t).toFixed(1)}" y="${h-8}" text-anchor="${anchor}" font-size="10" font-family="Inter" fill="var(--ink-faint)">${escapeHtml(lbl)}</text>`;
+    }
+
+    // lines (primary gets a soft fill to the zero line), then end-value pills
+    let areaDefs = '', linesSvg = '';
+    const ends = [];
+    visible.forEach(function(s, si){
+      const pts = s.points.filter(p=> !isNaN(parseDateMs(p.date)));
+      const coords = pts.map(p=> xFor(parseDateMs(p.date)).toFixed(1)+','+yFor(p.v).toFixed(1));
+      if(s.isPrimary){
+        const id = 'cmpFill'+si+'_'+Math.round(Math.random()*1e6);
+        areaDefs += `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${s.color}" stop-opacity=".22"/><stop offset="1" stop-color="${s.color}" stop-opacity="0.02"/></linearGradient>`;
+        linesSvg += `<polygon points="${xFor(parseDateMs(pts[0].date)).toFixed(1)},${zeroY.toFixed(1)} ${coords.join(' ')} ${xFor(parseDateMs(pts[pts.length-1].date)).toFixed(1)},${zeroY.toFixed(1)}" fill="url(#${id})"/>`;
+      }
+      linesSvg += `<polyline points="${coords.join(' ')}" fill="none" stroke="${s.color}" stroke-width="${s.isPrimary?2.2:1.7}" stroke-linejoin="round" stroke-linecap="round" opacity="${s.isPrimary?1:0.95}"/>`;
+      const last = pts[pts.length-1];
+      ends.push({s:s, x:xFor(parseDateMs(last.date)), y:yFor(last.v), v:last.v});
+    });
+    // end markers + non-overlapping value pills on the right edge
+    const pills = ends.slice().sort((a,b)=> a.y-b.y);
+    for(let i=1;i<pills.length;i++){ if(pills[i].y-pills[i-1].y<17) pills[i].py = (pills[i-1].py!==undefined?pills[i-1].py:pills[i-1].y)+17; }
+    let endSvg = '';
+    ends.forEach(e=>{
+      endSvg += `<circle cx="${e.x.toFixed(1)}" cy="${e.y.toFixed(1)}" r="3" fill="${e.s.color}" stroke="var(--surface)" stroke-width="1.5"/>`;
+    });
+    pills.forEach(e=>{
+      const py = e.py!==undefined ? e.py : e.y, txt = (e.v>=0?'+':'')+e.v.toFixed(2)+'%';
+      endSvg += `<rect x="${w-padR+4}" y="${(py-8).toFixed(1)}" width="${padR-6}" height="16" rx="8" fill="${e.s.color}"/>`+
+        `<text x="${(w-padR+4+(padR-6)/2).toFixed(1)}" y="${(py+3.6).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" font-family="IBM Plex Mono" fill="#fff">${txt}</text>`;
+    });
 
     containerEl.style.position = 'relative';
     containerEl.innerHTML = `
-      <svg class="td-chart-svg eq-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
-        <line x1="${padL}" y1="${zeroY}" x2="${w-padR}" y2="${zeroY}" stroke="var(--line)" stroke-width="1" stroke-dasharray="3,3"/>
+      <svg class="cmp-svg" width="100%" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block; height:${h}px;">
+        <defs>${areaDefs}</defs>
+        ${grid}
+        <line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w-padR}" y2="${zeroY.toFixed(1)}" stroke="var(--ink-faint)" stroke-width="1" stroke-dasharray="4,4" opacity=".55"/>
+        ${xl}
         ${linesSvg}
-        <line class="cmp-crosshair" x1="0" y1="${padT}" x2="0" y2="${h-padB}" stroke="var(--ink-faint)" stroke-width="1" opacity="0"/>
+        ${endSvg}
+        <line class="cmp-crosshair" x1="0" y1="${padT}" x2="0" y2="${h-padB}" stroke="var(--ink-faint)" stroke-width="1" stroke-dasharray="3,3" opacity="0"/>
+        <g class="cmp-hover-dots"></g>
       </svg>
       <div class="cmp-hit"></div>`;
 
     const svgEl = containerEl.querySelector('svg');
     const hitEl = containerEl.querySelector('.cmp-hit');
     const crosshairEl = containerEl.querySelector('.cmp-crosshair');
+    const dotsEl = containerEl.querySelector('.cmp-hover-dots');
     const tip = ensureEquityTooltip();
 
     function nearestOnOrBefore(s, t){
@@ -7169,34 +7254,35 @@
       for(const p of s.points){ const pt=parseDateMs(p.date); if(isNaN(pt)) continue; if(pt<=t) best=p; else break; }
       return best || s.points[0];
     }
-
+    function clearHover(){ hideEquityTooltip(); crosshairEl.setAttribute('opacity','0'); dotsEl.innerHTML = ''; }
     function handleMove(clientX){
       const rect = svgEl.getBoundingClientRect();
       if(!rect.width) return;
-      const frac = Math.min(1, Math.max(0, (clientX-rect.left)/rect.width));
+      const px = (clientX-rect.left)*(w/rect.width);
+      const frac = Math.min(1, Math.max(0, (px-padL)/plotW));
       const t = minT + frac*spanT;
-      const xPix = padL + frac*(w-padL-padR);
-      crosshairEl.setAttribute('x1', xPix.toFixed(1));
-      crosshairEl.setAttribute('x2', xPix.toFixed(1));
-      crosshairEl.setAttribute('opacity','0.6');
-      let anyDate = '';
+      const xPix = padL + frac*plotW;
+      crosshairEl.setAttribute('x1', xPix.toFixed(1)); crosshairEl.setAttribute('x2', xPix.toFixed(1)); crosshairEl.setAttribute('opacity','0.7');
+      let anyDate = '', dots = '';
       const rows = visible.map(s=>{
         const p = nearestOnOrBefore(s, t);
         if(!p) return '';
         anyDate = p.date;
+        dots += `<circle cx="${xFor(parseDateMs(p.date)).toFixed(1)}" cy="${yFor(p.v).toFixed(1)}" r="3.5" fill="${s.color}" stroke="var(--surface)" stroke-width="1.5"/>`;
         const valStr = (p.v>=0?'+':'')+p.v.toFixed(2)+'%';
         return `<div class="cmp-tip-row"><span class="cmp-tip-dot" style="background:${s.color}"></span>${escapeHtml(s.label)}: <b class="${p.v>=0?'pos':'neg'}">${valStr}</b></div>`;
       }).join('');
+      dotsEl.innerHTML = dots;
       tip.innerHTML = `<div class="eq-tip-date">${escapeHtml(anyDate)}</div>${rows}`;
       tip.style.display = 'block';
       tip.style.left = clientX + 'px';
       tip.style.top = (rect.top + window.scrollY - 6) + 'px';
     }
     hitEl.addEventListener('mousemove', e=> handleMove(e.clientX));
-    hitEl.addEventListener('mouseleave', ()=>{ hideEquityTooltip(); crosshairEl.setAttribute('opacity','0'); });
+    hitEl.addEventListener('mouseleave', clearHover);
     hitEl.addEventListener('touchstart', e=>{ if(e.touches[0]) handleMove(e.touches[0].clientX); }, {passive:true});
     hitEl.addEventListener('touchmove', e=>{ if(e.touches[0]) handleMove(e.touches[0].clientX); }, {passive:true});
-    hitEl.addEventListener('touchend', ()=>{ hideEquityTooltip(); crosshairEl.setAttribute('opacity','0'); });
+    hitEl.addEventListener('touchend', clearHover);
   }
 
   function renderComparisonLegend(legendEl, series, onToggle){
@@ -7204,7 +7290,7 @@
     legendEl.style.display = 'flex';
     legendEl.innerHTML = series.map(s=>
       `<button type="button" class="cmp-legend-item ${s.visible===false?'off':''}" data-key="${s.key}">`+
-      `<span class="cmp-legend-dot" style="background:${s.color}"></span>${escapeHtml(s.label)}</button>`
+      `<span class="cmp-legend-dot" style="background:${s.color}"></span>${escapeHtml(s.label)}${(s.points&&s.points.length>1&&s.visible!==false)?` <b style="font-family:'IBM Plex Mono'; font-weight:700; color:${s.points[s.points.length-1].v>=0?'var(--teal)':'var(--rose)'}; margin-left:3px;">${(s.points[s.points.length-1].v>=0?'+':'')+s.points[s.points.length-1].v.toFixed(2)}%</b>`:''}</button>`
     ).join('');
     legendEl.querySelectorAll('.cmp-legend-item').forEach(btn=>{
       btn.addEventListener('click', ()=> onToggle(btn.dataset.key));
@@ -7273,8 +7359,9 @@
         seriesList[placeholderIdx] = { key, label: cfg.label+(bkReady()?' (unavailable)':' (connect a broker)'), color: cfg.color, points: [], visible:false };
       } else {
         const rebased = rebaseToPercent(data, p=>p.date, p=>p.close, fromKey, toKey);
+        if(rebased.length<2){ benchErr[key] = (benchErr[key]||'') || 'not enough index history inside this date range'; }
         const usedSym = (loadBenchmarkDiskCache()[key]||{}).symbol || '';
-        seriesList[placeholderIdx] = { key, label: cfg.label+(/MOM100|HDFCSML250/.test(usedSym) ? ' (via ETF)' : ''), color: cfg.color, points: rebased, visible: true };
+        seriesList[placeholderIdx] = rebased.length<2 ? { key, label: cfg.label+' (no data in range)', color: cfg.color, points: [], visible:false } : { key, label: cfg.label+(/MOM100|HDFCSML250|MID150BEES|MIDCAPETF|SMALLCAP|MOSMALL250/.test(usedSym) ? ' (via ETF)' : ''), color: cfg.color, points: rebased, visible: true };
       }
       draw();
     }
